@@ -57,6 +57,11 @@ ranking-fondos/
 
 ## 🎯 Uso del Dashboard
 
+### 🌙 Tema Oscuro
+- **Por defecto**: El dashboard inicia en modo oscuro para una experiencia visual elegante
+- **Toggle disponible**: Cambia entre modo oscuro y claro desde el sidebar
+- **Gráficos optimizados**: Colores y contrastes adaptados para cada tema
+
 ### Filtros
 - **Región**: Filtra fondos por geografía (América del Norte, Europa, etc.)
 - **Clase de Activo**: Equity, Fixed Income, Commodities, etc.

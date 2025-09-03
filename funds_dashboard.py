@@ -31,31 +31,57 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Professional styling
+# Professional dark theme styling
 st.markdown("""
 <style>
+    /* Dark theme optimized styles */
     .main-header {
         font-size: 2.5rem;
         font-weight: 600;
-        color: #1f2937;
+        color: #fafafa;
         margin-bottom: 1rem;
+        text-align: center;
     }
     .metric-card {
-        background-color: #f9fafb;
+        background-color: #262730;
         padding: 1rem;
         border-radius: 0.5rem;
-        border: 1px solid #e5e7eb;
+        border: 1px solid #404040;
     }
     .performance-table {
         font-size: 0.9rem;
     }
     .positive-return {
-        color: #059669;
+        color: #10b981;
         font-weight: 500;
     }
     .negative-return {
-        color: #dc2626;
+        color: #ef4444;
         font-weight: 500;
+    }
+    
+    /* Dark theme toggle button */
+    .theme-toggle {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 999;
+        background: #262730;
+        border: 1px solid #404040;
+        border-radius: 5px;
+        padding: 5px 10px;
+        color: #fafafa;
+        cursor: pointer;
+    }
+    
+    /* Improve dataframe styling in dark mode */
+    .stDataFrame {
+        background-color: #262730;
+    }
+    
+    /* Better contrast for charts */
+    .js-plotly-plot {
+        background-color: transparent !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -307,8 +333,9 @@ def create_cumulative_returns_chart(funds_df, selected_funds, start_date, end_da
         
         fig = go.Figure()
         
-        colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', 
-                 '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#6366f1']
+        # Dark theme optimized colors - more vibrant and contrasting
+        colors = ['#60a5fa', '#f87171', '#34d399', '#fbbf24', '#a78bfa', 
+                 '#22d3ee', '#fb923c', '#a3e635', '#f472b6', '#818cf8']
         
         for i, fund in enumerate(selected_funds):
             if fund in filtered_data.columns:
@@ -343,6 +370,21 @@ def create_cumulative_returns_chart(funds_df, selected_funds, start_date, end_da
                 y=1.02,
                 xanchor="right",
                 x=1
+            ),
+            # Dark theme optimized layout
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#fafafa'),
+            title_font=dict(color='#fafafa', size=16),
+            xaxis=dict(
+                gridcolor='#404040',
+                zerolinecolor='#404040',
+                color='#fafafa'
+            ),
+            yaxis=dict(
+                gridcolor='#404040',
+                zerolinecolor='#404040',
+                color='#fafafa'
             )
         )
         
@@ -352,180 +394,329 @@ def create_cumulative_returns_chart(funds_df, selected_funds, start_date, end_da
         st.error(f"Error creating chart: {e}")
         return None
 
-def create_efficient_frontier_chart(funds_df, selected_funds, fund_names_dict, performance_df, debug_container=None):
-    """Create efficient frontier chart using portfolio optimization"""
+def calculate_efficient_frontier_cvxpy(funds_df, fund_tickers, debug_container=None):
+    """
+    Calculate efficient frontier using CVXPY optimization - EXACT same logic as codigo_ignacio.py
+    """
+    def debug_log(message):
+        if debug_container:
+            debug_container.write(message)
+        else:
+            print(message)
+    
     try:
-        if debug_container:
-            debug_container.write("🔍 **Iniciando cálculo de frontera eficiente...**")
-        
-        # Prepare data
-        funds_df['Dates'] = pd.to_datetime(funds_df['Dates'])
-        funds_subset = funds_df[['Dates'] + selected_funds].copy()
-        funds_subset = funds_subset.dropna()
-        
-        if len(funds_subset) < 2:
-            if debug_container:
-                debug_container.write("❌ Datos insuficientes después de eliminar valores nulos")
+        # Validate inputs
+        if len(fund_tickers) < 2:
+            debug_log(f"❌ No hay suficientes fondos: {len(fund_tickers)} (mínimo 2)")
             return None
         
-        if debug_container:
-            debug_container.write(f"✅ Datos preparados: {len(funds_subset)} observaciones")
+        # Limit to maximum 10 funds for computational efficiency
+        if len(fund_tickers) > 10:
+            fund_tickers = fund_tickers[:10]
+            debug_log(f"⚠️ Limitado a los primeros 10 fondos para eficiencia")
+            
+        # Filter data for selected funds
+        available_tickers = [ticker for ticker in fund_tickers if ticker in funds_df.columns]
+        if len(available_tickers) < 2:
+            debug_log(f"❌ Fondos disponibles insuficientes: {len(available_tickers)} de {len(fund_tickers)}")
+            debug_log(f"Fondos solicitados: {fund_tickers[:5]}...")
+            debug_log(f"Fondos disponibles: {available_tickers}")
+            return None
+            
+        funds_data = funds_df[['Dates'] + available_tickers].copy()
+        funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
+        funds_data = funds_data.dropna()
         
-        # Calculate returns
-        funds_subset = funds_subset.set_index('Dates')
-        returns = funds_subset.pct_change().dropna()
-        
-        if len(returns) < 10:
-            if debug_container:
-                debug_container.write("❌ Datos de retornos insuficientes")
+        if len(funds_data) < 50:
+            debug_log(f"❌ Datos insuficientes: {len(funds_data)} observaciones (mínimo 50)")
             return None
         
-        if debug_container:
-            debug_container.write(f"✅ Retornos calculados: {len(returns)} observaciones")
+        # Prepare data - EXACT same as Ignacio's code
+        funds_data = funds_data.set_index('Dates')
+        returns = funds_data.pct_change().dropna()
         
-        # Calculate expected returns and covariance matrix
-        mu = returns.mean() * 252  # Annualized returns
-        Sigma = returns.cov() * 252  # Annualized covariance
+        # === EXACT same logic as codigo_ignacio.py ===
+        mu_ann = returns.mean() * 252
+        cov_ann = returns.cov() * 252
         
-        n = len(selected_funds)
+        n = len(available_tickers)
+        debug_log(f"✅ Procesando {n} fondos con {len(returns)} observaciones de retornos")
         
-        if debug_container:
-            debug_container.write(f"✅ Parámetros calculados para {n} fondos")
-            debug_container.write(f"   - Retorno promedio anualizado: {mu.mean():.2%}")
-            debug_container.write(f"   - Volatilidad promedio anualizada: {np.sqrt(np.diag(Sigma)).mean():.2%}")
+        # Max Sharpe Portfolio - EXACT same as Ignacio's code
+        w_sh = cp.Variable(n)
+        ret_sh = mu_ann.values @ w_sh
+        var_sh = cp.quad_form(w_sh, cov_ann.values)
+        cons = [cp.sum(w_sh) == 1, ret_sh >= 1e-4, w_sh >= 0]
         
-        # Generate efficient frontier
-        target_returns = np.linspace(mu.min(), mu.max(), 50)
-        efficient_portfolios = []
+        # EXACT same as Ignacio's code - single line solve
+        debug_log("🔧 Resolviendo optimización Max Sharpe...")
+        cp.Problem(cp.Minimize(var_sh), cons).solve()
         
-        for target_return in target_returns:
+        if w_sh.value is None:
+            debug_log("❌ Optimización Max Sharpe falló")
+            return None
+            
+        w_opt = w_sh.value
+        ret_opt = mu_ann.values @ w_opt
+        std_opt = np.sqrt(w_opt.T @ cov_ann.values @ w_opt)
+        debug_log(f"✅ Max Sharpe calculado: Retorno={ret_opt:.4f}, Volatilidad={std_opt:.4f}")
+        
+        # Generate efficient frontier - EXACT same as Ignacio's code
+        targets, data, frontier = np.linspace(mu_ann.min(), mu_ann.max(), 50), [], []
+        successful_points = 0
+        
+        debug_log(f"🔧 Generando frontera eficiente con {len(targets)} puntos...")
+        
+        for i, t in enumerate(targets):
+            w = cp.Variable(n)
+            risk = cp.quad_form(w, cov_ann.values)
+            c = [cp.sum(w) == 1, mu_ann.values @ w == t, w >= 0]
             try:
-                # Portfolio optimization variables
-                w = cp.Variable(n)
+                # EXACT same as Ignacio's code - single line solve
+                cp.Problem(cp.Minimize(risk), c).solve()
                 
-                # Objective: minimize portfolio variance
-                portfolio_variance = cp.quad_form(w, Sigma.values)
-                
-                # Constraints
-                constraints = [
-                    cp.sum(w) == 1,  # Weights sum to 1
-                    w >= 0,  # Long-only constraint
-                    mu.values @ w == target_return  # Target return constraint
-                ]
-                
-                # Solve optimization problem
-                prob = cp.Problem(cp.Minimize(portfolio_variance), constraints)
-                prob.solve(solver=cp.ECOS, verbose=False)
-                
-                if prob.status == cp.OPTIMAL:
-                    portfolio_return = target_return
-                    portfolio_risk = np.sqrt(prob.value)
-                    weights = w.value
-                    
-                    efficient_portfolios.append({
-                        'return': portfolio_return,
-                        'risk': portfolio_risk,
-                        'weights': weights
+                if w.value is not None and risk.value is not None:
+                    std = np.sqrt(risk.value)
+                    sr = t / std if std > 0 else 0
+                    # EXACT same structure as Ignacio's code
+                    row = {asset: weight for asset, weight in zip(available_tickers, w.value)}
+                    row.update({
+                        "Retorno esperado": t,
+                        "Volatilidad": std,
+                        "Sharpe Ratio": sr
                     })
-                    
-            except Exception as e:
-                if debug_container:
-                    debug_container.write(f"⚠️ Error en optimización para retorno {target_return:.2%}: {e}")
+                    data.append(row)
+                    frontier.append((std, t, sr))
+                    successful_points += 1
+            except:
+                # EXACT same as Ignacio's code - simple continue
                 continue
         
-        if not efficient_portfolios:
-            if debug_container:
-                debug_container.write("❌ No se pudieron calcular portafolios eficientes")
+        debug_log(f"📈 Generados {successful_points} puntos válidos de {len(targets)} objetivos")
+        
+        if len(data) == 0:
+            debug_log("❌ No se generaron puntos válidos de frontera")
             return None
         
-        if debug_container:
-            debug_container.write(f"✅ Frontera eficiente calculada: {len(efficient_portfolios)} puntos")
+        # Create DataFrame with frontier data
+        frontier_df = pd.DataFrame(data)
         
-        # Create the plot
-        fig = go.Figure()
-        
-        # Plot efficient frontier
-        frontier_returns = [p['return'] for p in efficient_portfolios]
-        frontier_risks = [p['risk'] for p in efficient_portfolios]
-        
-        fig.add_trace(go.Scatter(
-            x=frontier_risks,
-            y=frontier_returns,
-            mode='lines',
-            name='Frontera Eficiente',
-            line=dict(color='blue', width=3),
-            hovertemplate='Risk: %{x:.2%}<br>Return: %{y:.2%}<extra></extra>'
-        ))
-        
-        # Plot individual funds
-        individual_returns = []
-        individual_risks = []
-        fund_labels = []
-        
-        for fund in selected_funds:
-            fund_return = mu[fund]
-            fund_risk = np.sqrt(Sigma.loc[fund, fund])
-            
-            individual_returns.append(fund_return)
-            individual_risks.append(fund_risk)
-            
-            # Get fund name from dictionary or use ticker
-            fund_name = fund_names_dict.get(fund, fund)
-            fund_labels.append(fund_name)
-        
-        fig.add_trace(go.Scatter(
-            x=individual_risks,
-            y=individual_returns,
-            mode='markers',
-            name='Fondos Individuales',
-            marker=dict(size=10, color='red'),
-            text=fund_labels,
-            hovertemplate='%{text}<br>Risk: %{x:.2%}<br>Return: %{y:.2%}<extra></extra>'
-        ))
-        
-        # Find and highlight optimal portfolio (maximum Sharpe ratio)
-        risk_free_rate = 0.02  # Assume 2% risk-free rate
-        sharpe_ratios = [(p['return'] - risk_free_rate) / p['risk'] for p in efficient_portfolios]
-        max_sharpe_idx = np.argmax(sharpe_ratios)
-        optimal_portfolio = efficient_portfolios[max_sharpe_idx]
-        
-        fig.add_trace(go.Scatter(
-            x=[optimal_portfolio['risk']],
-            y=[optimal_portfolio['return']],
-            mode='markers',
-            name='Portafolio Óptimo (Max Sharpe)',
-            marker=dict(size=15, color='green', symbol='star'),
-            hovertemplate='Optimal Portfolio<br>Risk: %{x:.2%}<br>Return: %{y:.2%}<br>Sharpe: %.3f<extra></extra>' % sharpe_ratios[max_sharpe_idx]
-        ))
-        
-        fig.update_layout(
-            title='Frontera Eficiente de Portafolios',
-            xaxis_title='Riesgo (Volatilidad Anualizada)',
-            yaxis_title='Retorno Esperado Anualizado',
-            hovermode='closest',
-            height=600,
-            showlegend=True
-        )
-        
-        # Format axes as percentages
-        fig.update_xaxes(tickformat='.1%')
-        fig.update_yaxes(tickformat='.1%')
-        
-        if debug_container:
-            debug_container.write("✅ Gráfico de frontera eficiente creado exitosamente")
-            debug_container.write(f"   - Portafolio óptimo: Retorno {optimal_portfolio['return']:.2%}, Riesgo {optimal_portfolio['risk']:.2%}")
-            debug_container.write(f"   - Ratio de Sharpe óptimo: {sharpe_ratios[max_sharpe_idx]:.3f}")
-        
-        return fig, optimal_portfolio
+        # Return data in format expected by chart function
+        return {
+            'frontier_points': frontier,
+            'max_sharpe': (std_opt, ret_opt),
+            'individual_assets': [(returns[asset].std() * np.sqrt(252), returns[asset].mean() * 252, asset) for asset in available_tickers],
+            'frontier_df': frontier_df
+        }
         
     except Exception as e:
-        if debug_container:
-            debug_container.write(f"❌ Error general en cálculo de frontera eficiente: {e}")
-        st.error(f"Error creating efficient frontier: {e}")
+        print(f"CVXPY efficient frontier calculation failed: {e}")
         return None
 
-def generate_pdf_report(performance_df, selected_funds, fund_names_dict):
-    """Generate PDF report with fund analysis"""
+def create_efficient_frontier_chart(funds_df, fund_tickers, fund_names_dict, df_performance, debug_container=None):
+    """Create efficient frontier chart - EXACT same logic as codigo_ignacio.py"""
+    try:
+        # Calculate efficient frontier with CVXPY - same as Ignacio's code
+        result = calculate_efficient_frontier_cvxpy(funds_df, fund_tickers, debug_container)
+        
+        if result is None:
+            if debug_container:
+                debug_container.write("❌ calculate_efficient_frontier_cvxpy retornó None")
+            return None, None
+        
+        # Extract data from result
+        frontier_points = result['frontier_points']
+        max_sharpe = result['max_sharpe']
+        individual_assets = result['individual_assets']
+        frontier_df = result['frontier_df']
+        
+        # Create figure - EXACT same as Ignacio's code
+        fig_f = go.Figure()
+        
+        # Add frontier points - dark theme optimized
+        for s, r, sr in frontier_points:
+            fig_f.add_trace(go.Scatter(x=[s], y=[r], mode='markers',
+                marker=dict(size=6, color='#60a5fa'), showlegend=False))
+        
+        # Add Max Sharpe point - dark theme optimized
+        std_opt, ret_opt = max_sharpe
+        fig_f.add_trace(go.Scatter(x=[std_opt], y=[ret_opt], mode='markers',
+            marker=dict(size=10, color='#f87171'), name='Max Sharpe'))
+        
+        # Add individual assets - only markers, names on hover
+        for s_a, r_a, asset_name in individual_assets:
+            # Get display name
+            display_name = fund_names_dict.get(asset_name, asset_name)
+            fig_f.add_trace(go.Scatter(x=[s_a], y=[r_a], mode='markers',
+                name=display_name, showlegend=False,
+                marker=dict(size=8, color='#9ca3af'),
+                hovertemplate='<b>%{fullData.name}</b><br>' +
+                             'Volatilidad: %{x:.2%}<br>' +
+                             'Retorno: %{y:.2%}<br>' +
+                             '<extra></extra>'))
+        
+        # Update layout - dark theme optimized
+        fig_f.update_layout(
+            title="Frontera Eficiente",
+            xaxis_title="Volatilidad Anual",
+            yaxis_title="Retorno Anual",
+            height=600,
+            showlegend=True,
+            xaxis=dict(
+                tickformat='.1%',
+                gridcolor='#404040',
+                zerolinecolor='#404040',
+                color='#fafafa'
+            ),
+            yaxis=dict(
+                tickformat='.1%',
+                gridcolor='#404040',
+                zerolinecolor='#404040',
+                color='#fafafa'
+            ),
+            # Dark theme layout
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#fafafa'),
+            title_font=dict(color='#fafafa', size=16)
+        )
+        
+        return fig_f, frontier_df
+        
+    except Exception as e:
+        st.error(f"Error creating efficient frontier chart: {e}")
+        return None, None
+
+def create_excel_report(df_performance, chart_fig, frontier_fig, weights, filtered_funds_count, funds_df=None, selected_funds=None, frontier_df=None):
+    """Create comprehensive Excel report with all data including efficient frontier and charts"""
+    try:
+        output = io.BytesIO()
+        
+        # Use xlsxwriter for better chart support
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Main performance data (complete analysis)
+            df_performance.to_excel(writer, sheet_name='Fund Analysis', index=False)
+            
+            # Efficient Frontier data (if available)
+            if frontier_df is not None and not frontier_df.empty:
+                # Round numerical columns for better readability
+                frontier_export = frontier_df.copy()
+                numerical_cols = frontier_export.select_dtypes(include=[np.number]).columns
+                frontier_export[numerical_cols] = frontier_export[numerical_cols].round(4)
+                frontier_export.to_excel(writer, sheet_name='Efficient Frontier', index=False)
+            
+            # Weights configuration
+            weights_df = pd.DataFrame(list(weights.items()), columns=['Metric', 'Weight (%)'])
+            weights_df.to_excel(writer, sheet_name='Scoring Weights', index=False)
+            
+            # Summary statistics
+            summary_data = {
+                'Report Generated': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+                'Total Funds Analyzed': [filtered_funds_count],
+                'Total Weight': [f"{sum(weights.values())}%"],
+                'Top Ranked Fund': [df_performance.iloc[0]['Fund Name'] if not df_performance.empty else 'N/A'],
+                'Top Custom Score': [f"{df_performance.iloc[0]['Custom Score']:.2f}" if not df_performance.empty and 'Custom Score' in df_performance.columns else 'N/A'],
+                'Analysis Date Range': [f"{funds_df['Dates'].min().date()} to {funds_df['Dates'].max().date()}" if funds_df is not None else 'N/A'],
+                'Total Data Points': [len(funds_df) if funds_df is not None else 'N/A'],
+                'Efficient Frontier Points': [len(frontier_df) if frontier_df is not None else 'N/A']
+            }
+            summary_df = pd.DataFrame(summary_data)
+            summary_df.to_excel(writer, sheet_name='Report Summary', index=False)
+            
+            # Risk metrics summary
+            if not df_performance.empty:
+                risk_cols = ['Fund Name', 'Ticker', 'Region', 'Asset Class', 'Sector', 'Volatility (%)', 'Max Drawdown (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
+                available_risk_cols = [col for col in risk_cols if col in df_performance.columns]
+                risk_df = df_performance[available_risk_cols].copy()
+                risk_df.to_excel(writer, sheet_name='Risk Analysis', index=False)
+            
+            # Performance metrics breakdown
+            if not df_performance.empty:
+                perf_cols = ['Fund Name', 'Ticker', 'YTD Return (%)', 'MTD Return (%)', 'Monthly Return (%)', 
+                           '1Y Return (%)', '2024 Return (%)', '2023 Return (%)', '2022 Return (%)']
+                available_perf_cols = [col for col in perf_cols if col in df_performance.columns]
+                perf_df = df_performance[available_perf_cols].copy()
+                perf_df.to_excel(writer, sheet_name='Returns Analysis', index=False)
+            
+            # Raw price data for selected funds (if available)
+            if funds_df is not None and selected_funds is not None and len(selected_funds) > 0:
+                # Get available tickers from selected funds
+                available_tickers = [ticker for ticker in selected_funds if ticker in funds_df.columns]
+                if available_tickers:
+                    price_cols = ['Dates'] + available_tickers[:10]  # Limit to 10 funds to avoid Excel limits
+                    price_data = funds_df[price_cols].copy()
+                    price_data.to_excel(writer, sheet_name='Price Data (Selected)', index=False)
+            
+            # Top performers by category
+            if not df_performance.empty and 'Custom Score' in df_performance.columns:
+                top_10 = df_performance.head(10)[['Fund Name', 'Ticker', 'Custom Score', 'YTD Return (%)', 'Volatility (%)']]
+                top_10.to_excel(writer, sheet_name='Top 10 Funds', index=False)
+            
+            # Add charts as images if available
+            workbook = writer.book
+            
+            if chart_fig is not None:
+                try:
+                    # Create a new worksheet for charts
+                    chart_worksheet = workbook.add_worksheet('Charts')
+                    
+                    # Convert chart to image and add to Excel
+                    chart_img_bytes = chart_fig.to_image(format="png", width=800, height=600)
+                    chart_worksheet.insert_image('A1', '', {'image_data': chart_img_bytes})
+                    
+                    # Add title
+                    title_format = workbook.add_format({'bold': True, 'font_size': 14})
+                    chart_worksheet.write('A40', 'Cumulative Returns Chart', title_format)
+                    
+                except Exception as e:
+                    print(f"Could not add cumulative returns chart to Excel: {e}")
+            
+            if frontier_fig is not None:
+                try:
+                    # Add frontier chart to the same worksheet or create new one
+                    if 'chart_worksheet' not in locals():
+                        chart_worksheet = workbook.add_worksheet('Charts')
+                    
+                    # Convert frontier chart to image and add to Excel
+                    frontier_img_bytes = frontier_fig.to_image(format="png", width=800, height=600)
+                    chart_worksheet.insert_image('A45', '', {'image_data': frontier_img_bytes})
+                    
+                    # Add title
+                    title_format = workbook.add_format({'bold': True, 'font_size': 14})
+                    chart_worksheet.write('A85', 'Efficient Frontier Chart', title_format)
+                    
+                except Exception as e:
+                    print(f"Could not add efficient frontier chart to Excel: {e}")
+        
+        output.seek(0)
+        return output.getvalue()
+        
+    except Exception as e:
+        st.error(f"Error creating Excel report: {e}")
+        return None
+
+def create_csv_report(df_performance):
+    """Create CSV report"""
+    try:
+        output = io.StringIO()
+        df_performance.to_csv(output, index=False)
+        return output.getvalue()
+    except Exception as e:
+        st.error(f"Error creating CSV report: {e}")
+        return None
+
+def fig_to_base64(fig):
+    """Convert plotly figure to base64 string for PDF"""
+    try:
+        img_bytes = fig.to_image(format="png", width=800, height=600)
+        img_base64 = base64.b64encode(img_bytes).decode()
+        return img_base64
+    except Exception as e:
+        st.error(f"Error converting figure to base64: {e}")
+        return None
+
+def create_pdf_report(df_performance, chart_fig, frontier_fig, weights, filtered_funds_count, frontier_df=None):
+    """Create comprehensive PDF report including efficient frontier analysis"""
     try:
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -538,94 +729,171 @@ def generate_pdf_report(performance_df, selected_funds, fund_names_dict):
             parent=styles['Heading1'],
             fontSize=24,
             spaceAfter=30,
-            alignment=1  # Center alignment
+            alignment=1  # Center
         )
-        story.append(Paragraph("Fund Analysis Report", title_style))
+        story.append(Paragraph("Reporte de Análisis de Fondos", title_style))
         story.append(Spacer(1, 20))
         
-        # Date
-        date_style = ParagraphStyle(
-            'DateStyle',
-            parent=styles['Normal'],
-            fontSize=12,
-            alignment=1
-        )
-        story.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", date_style))
-        story.append(Spacer(1, 30))
+        # Report summary
+        summary_style = styles['Heading2']
+        story.append(Paragraph("Resumen del Reporte", summary_style))
         
-        # Summary
-        summary_style = ParagraphStyle(
-            'SummaryStyle',
-            parent=styles['Heading2'],
-            fontSize=16,
-            spaceAfter=12
-        )
-        story.append(Paragraph("Executive Summary", summary_style))
+        summary_data = [
+            ['Reporte Generado', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+            ['Total Fondos Analizados', str(filtered_funds_count)],
+            ['Peso Total Scoring', f"{sum(weights.values())}%"],
+            ['Fondo Top Ranking', df_performance.iloc[0]['Fund Name'] if not df_performance.empty else 'N/A'],
+            ['Score Personalizado Top', f"{df_performance.iloc[0]['Custom Score']:.1f}" if not df_performance.empty and 'Custom Score' in df_performance.columns else 'N/A'],
+            ['Puntos Frontera Eficiente', str(len(frontier_df)) if frontier_df is not None else 'N/A']
+        ]
         
-        summary_text = f"""
-        This report analyzes {len(selected_funds)} selected funds based on various performance metrics.
-        The analysis includes returns across different time periods, risk metrics, and custom scoring.
-        """
-        story.append(Paragraph(summary_text, styles['Normal']))
-        story.append(Spacer(1, 20))
-        
-        # Performance table
-        story.append(Paragraph("Performance Metrics", summary_style))
-        
-        # Prepare table data
-        table_data = [['Fund', 'YTD Return', '1Y Return', 'Volatility', 'Max Drawdown', 'Custom Score']]
-        
-        for _, row in performance_df.head(10).iterrows():  # Top 10 funds
-            fund_name = fund_names_dict.get(row['Ticker'], row['Ticker'])
-            table_data.append([
-                fund_name[:30] + "..." if len(fund_name) > 30 else fund_name,
-                f"{row['YTD Return (%)']:.2f}%",
-                f"{row['1Y Return (%)']:.2f}%",
-                f"{row['Volatility (%)']:.2f}%",
-                f"{row['Max Drawdown (%)']:.2f}%",
-                f"{row.get('Custom Score', 0):.3f}"
-            ])
-        
-        # Create table
-        table = Table(table_data)
-        table.setStyle(TableStyle([
+        summary_table = Table(summary_data)
+        summary_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 12),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
+        story.append(summary_table)
+        story.append(Spacer(1, 20))
         
-        story.append(table)
-        story.append(Spacer(1, 30))
+        # Scoring weights
+        story.append(Paragraph("Pesos de Scoring Personalizado", summary_style))
+        weights_data = [['Métrica', 'Peso (%)']]
+        for metric, weight in weights.items():
+            weights_data.append([metric, f"{weight}%"])
         
-        # Methodology
-        story.append(Paragraph("Methodology", summary_style))
-        methodology_text = """
-        The analysis uses the following metrics:
-        • YTD Return: Year-to-date performance
-        • 1Y Return: One-year rolling return
-        • Volatility: Annualized standard deviation of returns
-        • Max Drawdown: Maximum peak-to-trough decline
-        • VaR/CVaR: Value at Risk and Conditional Value at Risk at 5% confidence level
-        • Custom Score: Z-score weighted composite ranking
-        """
-        story.append(Paragraph(methodology_text, styles['Normal']))
+        weights_table = Table(weights_data)
+        weights_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(weights_table)
+        story.append(Spacer(1, 20))
         
-        # Build PDF
+        # Top 10 funds table
+        if not df_performance.empty:
+            story.append(Paragraph("Top 10 Ranked Funds", summary_style))
+            
+            # Select key columns for the PDF table
+            key_cols = ['Fund Name', 'Custom Score', 'YTD Return (%)', '1Y Return (%)', 'Volatility (%)', 'Max Drawdown (%)']
+            top_10 = df_performance.head(10)[key_cols].copy()
+            
+            # Format the data for table
+            table_data = [key_cols]  # Header
+            for _, row in top_10.iterrows():
+                formatted_row = []
+                for col in key_cols:
+                    if col == 'Fund Name':
+                        # Truncate long names
+                        name = str(row[col])
+                        formatted_row.append(name[:30] + "..." if len(name) > 30 else name)
+                    elif col == 'Custom Score':
+                        formatted_row.append(f"{row[col]:.1f}" if pd.notnull(row[col]) else "N/A")
+                    else:
+                        formatted_row.append(f"{row[col]:.2f}%" if pd.notnull(row[col]) else "N/A")
+                table_data.append(formatted_row)
+            
+            funds_table = Table(table_data)
+            funds_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('FONTSIZE', (0, 1), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(funds_table)
+        
+        # Efficient Frontier Analysis (if available)
+        if frontier_df is not None and not frontier_df.empty:
+            story.append(Spacer(1, 20))
+            story.append(Paragraph("Análisis de Frontera Eficiente", summary_style))
+            
+            # Get optimal portfolios from frontier
+            max_sharpe_idx = frontier_df['Sharpe Ratio'].idxmax()
+            min_vol_idx = frontier_df['Volatilidad'].idxmin()
+            
+            frontier_summary = [
+                ['Métrica', 'Portfolio Max Sharpe', 'Portfolio Min Volatilidad'],
+                ['Retorno Esperado', f"{frontier_df.loc[max_sharpe_idx, 'Retorno esperado']:.2%}", f"{frontier_df.loc[min_vol_idx, 'Retorno esperado']:.2%}"],
+                ['Volatilidad', f"{frontier_df.loc[max_sharpe_idx, 'Volatilidad']:.2%}", f"{frontier_df.loc[min_vol_idx, 'Volatilidad']:.2%}"],
+                ['Sharpe Ratio', f"{frontier_df.loc[max_sharpe_idx, 'Sharpe Ratio']:.3f}", f"{frontier_df.loc[min_vol_idx, 'Sharpe Ratio']:.3f}"]
+            ]
+            
+            frontier_table = Table(frontier_summary)
+            frontier_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(frontier_table)
+        
+        # Note about charts
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("Nota: Los gráficos interactivos están disponibles en el dashboard web. Este PDF contiene únicamente los datos tabulares.", styles['Normal']))
+        
         doc.build(story)
         buffer.seek(0)
-        return buffer
+        return buffer.getvalue()
         
     except Exception as e:
-        st.error(f"Error generating PDF report: {e}")
+        st.error(f"Error creating PDF report: {e}")
         return None
 
 def main():
     """Main dashboard function"""
+    
+    # Theme toggle in sidebar
+    st.sidebar.markdown("### 🎨 Tema")
+    theme_choice = st.sidebar.selectbox(
+        "Seleccionar tema:",
+        ["🌙 Modo Oscuro", "☀️ Modo Claro"],
+        index=0  # Default to dark mode
+    )
+    
+    # Apply theme-specific styling
+    if theme_choice == "☀️ Modo Claro":
+        st.markdown("""
+        <style>
+            .stApp {
+                background-color: #ffffff;
+                color: #1f2937;
+            }
+            .main-header {
+                color: #1f2937 !important;
+            }
+            .metric-card {
+                background-color: #f9fafb !important;
+                border: 1px solid #e5e7eb !important;
+            }
+            .positive-return {
+                color: #059669 !important;
+            }
+            .negative-return {
+                color: #dc2626 !important;
+            }
+        </style>
+        """, unsafe_allow_html=True)
     
     # Header
     st.markdown('<h1 class="main-header">📈 Dashboard de Análisis de Fondos</h1>', unsafe_allow_html=True)
@@ -646,7 +914,7 @@ def main():
     fund_info = {}
     if not etf_dict.empty:
         for _, row in etf_dict.iterrows():
-            dict_ticker = str(row.get('Ticker', ''))
+            dict_ticker = row.get('Ticker', '')
             
             # Try to match with available funds
             matched_fund = None
@@ -766,296 +1034,504 @@ def main():
         default=[]  # Start with no selection
     )
     
-    # Apply filters to get filtered funds
+    # Apply filters
     filtered_funds = []
+    for fund in available_funds:
+        if fund in fund_info:
+            fund_region = fund_info[fund].get('region', 'Unknown')
+            fund_asset_class = fund_info[fund].get('asset_class', 'Unknown')
+            fund_subclass = fund_info[fund].get('subclass', 'Unknown')
+            fund_sector = fund_info[fund].get('sector', 'Unknown')
+            
+            # Include fund if it matches selected filters OR if no filters are selected
+            region_match = not selected_regions or fund_region in selected_regions
+            asset_class_match = not selected_asset_classes or fund_asset_class in selected_asset_classes
+            subclass_match = not selected_subclasses or fund_subclass in selected_subclasses
+            sector_match = not selected_sectors or fund_sector in selected_sectors
+            
+            if region_match and asset_class_match and subclass_match and sector_match:
+                filtered_funds.append(fund)
+        else:
+            # Include funds not in dictionary if no specific filters are applied
+            if not selected_regions and not selected_asset_classes and not selected_subclasses and not selected_sectors:
+                filtered_funds.append(fund)
     
-    if not any([selected_regions, selected_asset_classes, selected_subclasses, selected_sectors]):
-        # If no filters selected, show all funds
-        filtered_funds = available_funds
+    # Show filtered results
+    st.sidebar.write(f"**Filtered funds: {len(filtered_funds)}**")
+    
+    # Custom Scoring System
+    st.sidebar.markdown("### 🎯 Custom Fund Ranking")
+    st.sidebar.markdown("Ajusta los pesos para crear tu score personalizado (suman automáticamente 100%):")
+    
+    # Weight sliders for each metric (raw values, will be normalized)
+    raw_weights = {}
+    
+    col1, col2 = st.sidebar.columns(2)
+    
+    with col1:
+        st.markdown("**Retornos**")
+        raw_weights['YTD Return (%)'] = st.slider("YTD Return", 0, 100, 20, 5)
+        raw_weights['MTD Return (%)'] = st.slider("MTD Return", 0, 100, 10, 5)
+        raw_weights['1Y Return (%)'] = st.slider("1Y Return", 0, 100, 25, 5)
+        raw_weights['2024 Return (%)'] = st.slider("2024 Return", 0, 100, 15, 5)
+        raw_weights['2023 Return (%)'] = st.slider("2023 Return", 0, 100, 10, 5)
+    
+    with col2:
+        st.markdown("**Riesgo**")
+        raw_weights['2022 Return (%)'] = st.slider("2022 Return", 0, 100, 5, 5)
+        raw_weights['Monthly Return (%)'] = st.slider("Monthly Return", 0, 100, 5, 5)
+        raw_weights['Max Drawdown (%)'] = st.slider("Max Drawdown", 0, 100, 5, 5)
+        raw_weights['Volatility (%)'] = st.slider("Volatility", 0, 100, 5, 5)
+        raw_weights['VaR 5% (%)'] = st.slider("VaR 5%", 0, 100, 5, 5)
+        raw_weights['CVaR 5% (%)'] = st.slider("CVaR 5%", 0, 100, 5, 5)
+    
+    # Normalize weights to sum to 100%
+    total_raw_weight = sum(raw_weights.values())
+    if total_raw_weight > 0:
+        weights = {metric: (weight / total_raw_weight) * 100 for metric, weight in raw_weights.items()}
     else:
-        # Apply filters
-        for fund in available_funds:
-            if fund in fund_info:
-                info = fund_info[fund]
-                
-                # Check if fund matches all selected filters
-                region_match = not selected_regions or info.get('region', 'Unknown') in selected_regions
-                asset_match = not selected_asset_classes or info.get('asset_class', 'Unknown') in selected_asset_classes
-                subclass_match = not selected_subclasses or info.get('subclass', 'Unknown') in selected_subclasses
-                sector_match = not selected_sectors or info.get('sector', 'Unknown') in selected_sectors
-                
-                if region_match and asset_match and subclass_match and sector_match:
-                    filtered_funds.append(fund)
-            else:
-                # Include funds without metadata if no specific filters are applied
-                if not any([selected_regions, selected_asset_classes, selected_subclasses, selected_sectors]):
-                    filtered_funds.append(fund)
+        # If all weights are 0, distribute equally
+        weights = {metric: 100/len(raw_weights) for metric in raw_weights.keys()}
     
-    st.sidebar.markdown("### 📊 Filtered Results")
-    st.sidebar.write(f"🎯 Filtered funds: {len(filtered_funds)}")
+    # Show normalized weights
+    st.sidebar.success(f"✅ Pesos normalizados (suman 100%)")
+    
+    # Show top 3 weights for reference
+    sorted_weights = sorted(weights.items(), key=lambda x: x[1], reverse=True)[:3]
+    for metric, weight in sorted_weights:
+        metric_short = metric.replace(' (%)', '').replace('Return', 'Ret')
+        st.sidebar.write(f"• {metric_short}: {weight:.1f}%")
+    
+    # Z-score explanation
+    with st.sidebar.expander("ℹ️ Sobre el Z-Score"):
+        st.write("""
+        **Z-Score (σ)**: Mide cuántas desviaciones estándar está un fondo por encima o debajo del promedio.
+        
+        • **+2.0σ**: Excelente (top 2.5%)
+        • **+1.0σ**: Muy bueno (top 16%)
+        • **0.0σ**: Promedio
+        • **-1.0σ**: Bajo promedio (bottom 16%)
+        • **-2.0σ**: Muy bajo (bottom 2.5%)
+        
+        Esto permite comparar métricas de diferentes escalas de forma justa.
+        """)
+    
+    # Date range selector with shortcuts
+    st.sidebar.markdown("### 📅 Chart Date Range")
+    
+    # Get date range from data
+    funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
+    min_date = funds_data['Dates'].min().date()
+    max_date = funds_data['Dates'].max().date()
+    
+    # Quick date shortcuts
+    st.sidebar.markdown("**Quick Shortcuts:**")
+    shortcut_cols = st.sidebar.columns(2)
+    
+    with shortcut_cols[0]:
+        if st.button("YTD", use_container_width=True):
+            st.session_state.chart_start_date = pd.to_datetime(f'{max_date.year}-01-01').date()
+            st.session_state.chart_end_date = max_date
+        if st.button("1 Year", use_container_width=True):
+            st.session_state.chart_start_date = max_date - timedelta(days=365)
+            st.session_state.chart_end_date = max_date
+    
+    with shortcut_cols[1]:
+        if st.button("2 Years", use_container_width=True):
+            st.session_state.chart_start_date = max_date - timedelta(days=730)
+            st.session_state.chart_end_date = max_date
+        if st.button("1 Month", use_container_width=True):
+            st.session_state.chart_start_date = max_date - timedelta(days=30)
+            st.session_state.chart_end_date = max_date
+    
+    # Initialize session state for dates if not exists
+    if 'chart_start_date' not in st.session_state:
+        st.session_state.chart_start_date = max_date - timedelta(days=365*2)
+    if 'chart_end_date' not in st.session_state:
+        st.session_state.chart_end_date = max_date
+    
+    # Date inputs
+    chart_start_date = st.sidebar.date_input(
+        "Chart Start Date:",
+        value=st.session_state.chart_start_date,
+        min_value=min_date,
+        max_value=max_date,
+        key="start_date_input"
+    )
+    
+    chart_end_date = st.sidebar.date_input(
+        "Chart End Date:",
+        value=st.session_state.chart_end_date,
+        min_value=min_date,
+        max_value=max_date,
+        key="end_date_input"
+    )
+    
+    # Update session state
+    st.session_state.chart_start_date = chart_start_date
+    st.session_state.chart_end_date = chart_end_date
     
     # MAIN CONTENT
-    if filtered_funds:
-        # Calculate performance metrics for filtered funds
-        st.markdown("## 📊 Performance Analysis")
+    if not filtered_funds:
+        st.warning("Ningún fondo coincide con los criterios de filtro seleccionados. Ajusta los filtros para ver resultados.")
+        return
+    
+    # Show performance table for all filtered funds
+    st.markdown("## 📋 Performance de Fondos Filtrados")
+    st.markdown(f"**{len(filtered_funds)} fondos coinciden con los criterios de filtro**")
+    
+    with st.spinner("Calculando métricas de performance..."):
+        performance_data = []
         
-        with st.spinner("Calculating performance metrics..."):
-            performance_data = []
+        for fund in filtered_funds:
+            metrics = calculate_performance_metrics(funds_data, fund)
             
-            progress_bar = st.progress(0)
-            for i, fund in enumerate(filtered_funds):
-                metrics = calculate_performance_metrics(funds_data, fund)
-                if metrics:
-                    fund_name = fund_info.get(fund, {}).get('name', fund)
-                    
-                    performance_data.append({
-                        'Ticker': fund,
-                        'Fund Name': fund_name,
-                        **metrics
-                    })
+            if metrics:
+                fund_display_name = fund_info.get(fund, {}).get('name', fund)
+                region = fund_info.get(fund, {}).get('region', 'Unknown')
+                asset_class = fund_info.get(fund, {}).get('asset_class', 'Unknown')
+                subclass = fund_info.get(fund, {}).get('subclass', 'Unknown')
+                sector = fund_info.get(fund, {}).get('sector', 'Unknown')
                 
-                progress_bar.progress((i + 1) / len(filtered_funds))
-            
-            progress_bar.empty()
+                row = {
+                    'Fund Name': fund_display_name,
+                    'Ticker': fund,
+                    'Region': region,
+                    'Asset Class': asset_class,
+                    'Subclass': subclass,
+                    'Sector': sector,
+                    **metrics
+                }
+                performance_data.append(row)
         
         if performance_data:
             df_performance = pd.DataFrame(performance_data)
             
-            # Custom scoring section
-            st.markdown("### 🎯 Custom Scoring")
+            # Calculate custom score and sort by it
+            df_scored = calculate_custom_score(df_performance, weights)
             
-            col1, col2 = st.columns([2, 1])
+            # Format percentage columns for display
+            display_df = df_scored.copy()
+            percentage_cols = ['YTD Return (%)', 'MTD Return (%)', 'Monthly Return (%)', '1Y Return (%)',
+                             '2024 Return (%)', '2023 Return (%)', '2022 Return (%)', 'Max Drawdown (%)', 
+                             'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
             
-            with col2:
-                st.markdown("#### Weight Configuration")
-                st.markdown("*Adjust weights for custom ranking (total should be 100%)*")
-                
-                weights = {}
-                metrics_for_scoring = [
-                    'YTD Return (%)', 'MTD Return (%)', 'Monthly Return (%)', '1Y Return (%)',
-                    '2024 Return (%)', '2023 Return (%)', '2022 Return (%)',
-                    'Max Drawdown (%)', 'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)'
-                ]
-                
-                # Default weights
-                default_weights = {
-                    'YTD Return (%)': 20,
-                    '1Y Return (%)': 25,
-                    '2024 Return (%)': 15,
-                    'Max Drawdown (%)': 15,
-                    'Volatility (%)': 15,
-                    'VaR 5% (%)': 10
-                }
-                
-                total_weight = 0
-                for metric in metrics_for_scoring:
-                    default_val = default_weights.get(metric, 0)
-                    weight = st.slider(
-                        metric.replace(' (%)', ''),
-                        min_value=0,
-                        max_value=50,
-                        value=default_val,
-                        step=1,
-                        key=f"weight_{metric}"
+            for col in percentage_cols:
+                if col in display_df.columns:
+                    display_df[col] = display_df[col].apply(lambda x: f"{x:.2f}%" if pd.notnull(x) else "N/A")
+            
+            # Format custom score (Z-score format)
+            if 'Custom Score' in display_df.columns:
+                display_df['Custom Score'] = display_df['Custom Score'].apply(lambda x: f"{x:.2f}σ" if pd.notnull(x) else "N/A")
+            
+            # Reorder columns to put Custom Score first after basic info
+            base_cols = ['Fund Name', 'Ticker', 'Region', 'Asset Class', 'Subclass', 'Sector']
+            if 'Custom Score' in display_df.columns:
+                base_cols.append('Custom Score')
+            
+            metric_cols = [col for col in display_df.columns if col not in base_cols]
+            final_cols = base_cols + metric_cols
+            display_df = display_df[final_cols]
+            
+            # Display the performance table with ranking
+            st.markdown("**📊 Fondos ordenados por score personalizado**")
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+            # Create selection interface using fund names from scored dataframe (for downloads and charts)
+            fund_options = {}
+            for _, row in df_scored.iterrows():
+                display_name = row['Fund Name']
+                if len(display_name) > 80:
+                    display_name = display_name[:77] + "..."
+                fund_options[f"{display_name} ({row['Ticker']})"] = row['Ticker']
+            
+            # Download buttons section
+            st.markdown("### 📥 Descargar Reportes")
+            
+            download_cols = st.columns(3)
+            
+            with download_cols[0]:
+                # CSV Download
+                csv_data = create_csv_report(display_df)
+                if csv_data:
+                    st.download_button(
+                        label="📄 Descargar CSV",
+                        data=csv_data,
+                        file_name=f"analisis_fondos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
                     )
-                    weights[metric] = weight
-                    total_weight += weight
+            
+            with download_cols[1]:
+                # Excel Download with charts - include all available fund tickers for comprehensive data
+                all_tickers = list(fund_options.values())[:20]  # Limit to 20 funds to avoid Excel size issues
                 
-                st.write(f"**Total Weight: {total_weight}%**")
-                if total_weight != 100:
-                    st.warning("⚠️ Weights should sum to 100% for optimal scoring")
-            
-            with col1:
-                # Calculate custom scores
-                df_scored = calculate_custom_score(df_performance, weights)
+                # Calculate frontier data and charts for export if we have enough funds
+                frontier_df_export = None
+                frontier_chart_export = None
+                cumulative_chart_export = None
                 
-                st.markdown("#### Top Performing Funds")
-                
-                # Display top funds
-                display_columns = ['Ticker', 'Fund Name', 'YTD Return (%)', '1Y Return (%)', 
-                                 'Max Drawdown (%)', 'Volatility (%)', 'Custom Score']
-                
-                # Format the display dataframe
-                df_display = df_scored[display_columns].copy()
-                
-                # Format numeric columns
-                numeric_columns = ['YTD Return (%)', '1Y Return (%)', 'Max Drawdown (%)', 'Volatility (%)']
-                for col in numeric_columns:
-                    df_display[col] = df_display[col].round(2)
-                
-                df_display['Custom Score'] = df_display['Custom Score'].round(3)
-                
-                st.dataframe(
-                    df_display.head(20),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            
-            # Charts section
-            st.markdown("### 📈 Performance Charts")
-            
-            # Fund selection for charts
-            top_funds = df_scored.head(10)['Ticker'].tolist()
-            
-            selected_funds_for_chart = st.multiselect(
-                "Select funds for comparison (max 10):",
-                options=filtered_funds,
-                default=top_funds[:5],
-                max_selections=10
-            )
-            
-            if selected_funds_for_chart:
-                # Date range selection
-                col1, col2 = st.columns(2)
-                
-                funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
-                min_date = funds_data['Dates'].min().date()
-                max_date = funds_data['Dates'].max().date()
-                
-                with col1:
-                    start_date = st.date_input(
-                        "Start Date",
-                        value=max_date - timedelta(days=365),
-                        min_value=min_date,
-                        max_value=max_date
-                    )
-                
-                with col2:
-                    end_date = st.date_input(
-                        "End Date",
-                        value=max_date,
-                        min_value=min_date,
-                        max_value=max_date
-                    )
-                
-                # Create cumulative returns chart
-                if start_date < end_date:
-                    chart = create_cumulative_returns_chart(
-                        funds_data, 
-                        selected_funds_for_chart, 
-                        pd.to_datetime(start_date), 
-                        pd.to_datetime(end_date)
-                    )
-                    
-                    if chart:
-                        st.plotly_chart(chart, use_container_width=True)
-                    else:
-                        st.warning("No data available for the selected date range and funds.")
-                else:
-                    st.error("Start date must be before end date.")
-            
-            # Efficient Frontier Analysis
-            st.markdown("### 🎯 Efficient Frontier Analysis")
-            
-            selected_funds_for_frontier = st.multiselect(
-                "Select funds for efficient frontier analysis (2-10 funds):",
-                options=filtered_funds,
-                default=top_funds[:5] if len(top_funds) >= 5 else top_funds,
-                max_selections=10
-            )
-            
-            if len(selected_funds_for_frontier) >= 2:
-                with st.spinner("Calculating efficient frontier..."):
-                    # Create fund names dictionary
-                    fund_names_dict = {}
-                    for fund in selected_funds_for_frontier:
-                        fund_names_dict[fund] = fund_info.get(fund, {}).get('name', fund)
-                    
-                    # Get performance data for selected funds
-                    selected_performance = df_scored[df_scored['Ticker'].isin(selected_funds_for_frontier)]
-                    
-                    # Create debug container
-                    debug_container = st.expander("🔍 Debug Information", expanded=False)
-                    
-                    result = create_efficient_frontier_chart(
-                        funds_data, 
-                        selected_funds_for_frontier, 
-                        fund_names_dict, 
-                        selected_performance,
-                        debug_container
-                    )
-                    
-                    if result and len(result) == 2:
-                        fig, optimal_portfolio = result
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Show optimal portfolio composition
-                        st.markdown("#### Optimal Portfolio Composition")
-                        
-                        if optimal_portfolio and 'weights' in optimal_portfolio:
-                            weights_df = pd.DataFrame({
-                                'Fund': selected_funds_for_frontier,
-                                'Weight (%)': [w * 100 for w in optimal_portfolio['weights']],
-                                'Fund Name': [fund_names_dict.get(fund, fund) for fund in selected_funds_for_frontier]
-                            })
-                            
-                            # Filter out very small weights
-                            weights_df = weights_df[weights_df['Weight (%)'] > 0.1].sort_values('Weight (%)', ascending=False)
-                            
-                            col1, col2 = st.columns([1, 1])
-                            
-                            with col1:
-                                st.dataframe(
-                                    weights_df[['Fund Name', 'Weight (%)']].round(2),
-                                    use_container_width=True,
-                                    hide_index=True
-                                )
-                            
-                            with col2:
-                                # Pie chart of portfolio composition
-                                fig_pie = px.pie(
-                                    weights_df,
-                                    values='Weight (%)',
-                                    names='Fund Name',
-                                    title='Portfolio Composition'
-                                )
-                                st.plotly_chart(fig_pie, use_container_width=True)
-                    
-                    elif result:
-                        st.plotly_chart(result, use_container_width=True)
-            else:
-                st.info("Select at least 2 funds to see efficient frontier analysis.")
-            
-            # Export functionality
-            st.markdown("### 📄 Export Report")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # CSV export
-                csv_data = df_scored.to_csv(index=False)
-                st.download_button(
-                    label="📊 Download CSV Report",
-                    data=csv_data,
-                    file_name=f"fund_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                    mime="text/csv"
-                )
-            
-            with col2:
-                # PDF export
-                if st.button("📄 Generate PDF Report"):
-                    with st.spinner("Generating PDF report..."):
+                if len(filtered_funds) >= 2:
+                    try:
                         fund_names_dict = {}
-                        for fund in filtered_funds:
-                            fund_names_dict[fund] = fund_info.get(fund, {}).get('name', fund)
+                        for _, row in df_scored.iterrows():
+                            fund_names_dict[row['Ticker']] = row['Fund Name']
                         
-                        pdf_buffer = generate_pdf_report(df_scored, selected_funds_for_chart, fund_names_dict)
+                        frontier_result = create_efficient_frontier_chart(funds_data, filtered_funds, fund_names_dict, df_scored, None)
+                        if frontier_result and len(frontier_result) == 2:
+                            frontier_chart_export, frontier_df_export = frontier_result
+                    except:
+                        frontier_df_export = None
+                        frontier_chart_export = None
+                
+                # Generate cumulative returns chart for top 5 funds
+                if len(fund_options) > 0:
+                    try:
+                        top_5_tickers = list(fund_options.values())[:5]
+                        chart_end_date = pd.to_datetime(funds_data['Dates'].max())
+                        chart_start_date = chart_end_date - timedelta(days=365)  # Last year
                         
-                        if pdf_buffer:
+                        cumulative_chart_export = create_cumulative_returns_chart(
+                            funds_data, 
+                            top_5_tickers, 
+                            chart_start_date, 
+                            chart_end_date
+                        )
+                    except:
+                        cumulative_chart_export = None
+                
+                excel_data = create_excel_report(
+                    df_scored, 
+                    cumulative_chart_export, 
+                    frontier_chart_export, 
+                    weights, 
+                    len(filtered_funds), 
+                    funds_data, 
+                    all_tickers, 
+                    frontier_df_export
+                )
+                if excel_data:
+                    st.download_button(
+                        label="📊 Descargar Excel",
+                        data=excel_data,
+                        file_name=f"analisis_fondos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+            
+            with download_cols[2]:
+                # PDF Download with charts
+                frontier_df_export = None
+                frontier_chart_export = None
+                cumulative_chart_export = None
+                
+                # Generate charts for export
+                if len(filtered_funds) >= 2:
+                    try:
+                        fund_names_dict = {}
+                        for _, row in df_scored.iterrows():
+                            fund_names_dict[row['Ticker']] = row['Fund Name']
+                        
+                        frontier_result = create_efficient_frontier_chart(funds_data, filtered_funds, fund_names_dict, df_scored, None)
+                        if frontier_result and len(frontier_result) == 2:
+                            frontier_chart_export, frontier_df_export = frontier_result
+                    except:
+                        frontier_df_export = None
+                        frontier_chart_export = None
+                
+                # Generate cumulative returns chart for top 5 funds
+                if len(fund_options) > 0:
+                    try:
+                        top_5_tickers = list(fund_options.values())[:5]
+                        chart_end_date = pd.to_datetime(funds_data['Dates'].max())
+                        chart_start_date = chart_end_date - timedelta(days=365)  # Last year
+                        
+                        cumulative_chart_export = create_cumulative_returns_chart(
+                            funds_data, 
+                            top_5_tickers, 
+                            chart_start_date, 
+                            chart_end_date
+                        )
+                    except:
+                        cumulative_chart_export = None
+                
+                pdf_data = create_pdf_report(
+                    df_scored, 
+                    cumulative_chart_export, 
+                    frontier_chart_export, 
+                    weights, 
+                    len(filtered_funds), 
+                    frontier_df_export
+                )
+                if pdf_data:
+                    st.download_button(
+                        label="📑 Descargar PDF",
+                        data=pdf_data,
+                        file_name=f"analisis_fondos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+            
+            # Fund selection for chart
+            st.markdown("## 📊 Análisis de Gráficos")
+            selected_fund_names = st.multiselect(
+                "Seleccionar fondos para análisis gráfico:",
+                options=list(fund_options.keys()),
+                default=list(fund_options.keys())[:5] if len(fund_options) >= 5 else list(fund_options.keys())
+            )
+            
+            # Get selected fund tickers
+            selected_funds = [fund_options[name] for name in selected_fund_names]
+            
+            if selected_funds:
+                st.markdown(f"**Mostrando {len(selected_funds)} fondos seleccionados desde {chart_start_date} hasta {chart_end_date}**")
+                
+                # Create and display chart with custom date range
+                chart = create_cumulative_returns_chart(
+                    funds_data, 
+                    selected_funds, 
+                    pd.to_datetime(chart_start_date), 
+                    pd.to_datetime(chart_end_date)
+                )
+                if chart:
+                    st.plotly_chart(chart, use_container_width=True)
+                
+                # Show selected funds summary (from scored dataframe)
+                selected_performance = df_scored[df_scored['Ticker'].isin(selected_funds)]
+                st.markdown("### 📈 Resumen de Fondos Seleccionados")
+                
+                # Format the summary table for display
+                summary_display = selected_performance.copy()
+                for col in percentage_cols:
+                    if col in summary_display.columns:
+                        summary_display[col] = summary_display[col].apply(lambda x: f"{x:.2f}%" if pd.notnull(x) else "N/A")
+                
+                if 'Custom Score' in summary_display.columns:
+                    summary_display['Custom Score'] = summary_display['Custom Score'].apply(lambda x: f"{x:.1f}" if pd.notnull(x) else "N/A")
+                
+                st.dataframe(summary_display[final_cols], use_container_width=True, hide_index=True)
+            else:
+                st.info("👆 Selecciona fondos de la lista para ver el gráfico de retornos acumulados.")
+            
+            # Análisis de Frontera Eficiente
+            st.markdown("## 🎯 Análisis de Frontera Eficiente")
+            
+            if len(filtered_funds) >= 2:  # Need at least 2 funds for frontier
+                # Create fund names dictionary for the chart
+                fund_names_dict = {}
+                for _, row in df_scored.iterrows():
+                    fund_names_dict[row['Ticker']] = row['Fund Name']
+                
+                # Create efficient frontier chart
+                with st.spinner("Calculando frontera eficiente..."):
+                    frontier_result = create_efficient_frontier_chart(
+                        funds_data, 
+                        filtered_funds, 
+                        fund_names_dict, 
+                        df_scored,
+                        None  # No debug container for main calculation
+                    )
+                
+                if frontier_result and len(frontier_result) == 2 and frontier_result[0] is not None:
+                    frontier_chart, frontier_df = frontier_result
+                    st.plotly_chart(frontier_chart, use_container_width=True)
+                    
+                    # Display efficient frontier data table
+                    if frontier_df is not None and not frontier_df.empty:
+                        with st.expander("📊 Datos de Frontera Eficiente"):
+                            # Format the dataframe for display
+                            display_frontier = frontier_df.copy()
+                            
+                            # Round numerical columns
+                            numerical_cols = display_frontier.select_dtypes(include=[np.number]).columns
+                            display_frontier[numerical_cols] = display_frontier[numerical_cols].round(4)
+                            
+                            # Format percentage columns
+                            for col in ['Retorno esperado', 'Volatilidad']:
+                                if col in display_frontier.columns:
+                                    display_frontier[col] = display_frontier[col].apply(lambda x: f"{x:.2%}")
+                            
+                            if 'Sharpe Ratio' in display_frontier.columns:
+                                display_frontier['Sharpe Ratio'] = display_frontier['Sharpe Ratio'].apply(lambda x: f"{x:.3f}")
+                            
+                            st.dataframe(display_frontier, use_container_width=True, hide_index=True)
+                            
+                            # Download button for efficient frontier data
+                            frontier_csv = frontier_df.to_csv(index=False)
                             st.download_button(
-                                label="📄 Download PDF Report",
-                                data=pdf_buffer.getvalue(),
-                                file_name=f"fund_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                                mime="application/pdf"
+                                label="📥 Descargar Datos CSV",
+                                data=frontier_csv,
+                                file_name=f"frontera_eficiente_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                mime="text/csv"
                             )
-                        else:
-                            st.error("Failed to generate PDF report")
-        
+                else:
+                    st.warning("""
+                    **No se pudo calcular la frontera eficiente**
+                    
+                    Posibles causas:
+                    • **Datos insuficientes**: Se necesitan al menos 50 observaciones de precios
+                    • **Alta correlación**: Los fondos seleccionados están muy correlacionados
+                    • **Problemas numéricos**: Matriz de covarianza singular o mal condicionada
+                    
+                    **Sugerencias:**
+                    • Selecciona fondos de diferentes regiones o clases de activos
+                    • Verifica que los fondos tengan suficiente historial de datos
+                    • Reduce el número de fondos seleccionados (máximo 10)
+                    """)
+                    
+                    # Show diagnostic information
+                    with st.expander("🔍 Información de Diagnóstico"):
+                        debug_container = st.container()
+                        
+                        try:
+                            # Basic statistics about selected funds
+                            available_tickers = [ticker for ticker in selected_funds if ticker in funds_data.columns]
+                            if available_tickers:
+                                funds_subset = funds_data[['Dates'] + available_tickers].copy()
+                                funds_subset['Dates'] = pd.to_datetime(funds_subset['Dates'])
+                                funds_subset = funds_subset.dropna()
+                                
+                                st.write(f"**Fondos disponibles:** {len(available_tickers)}")
+                                st.write(f"**Observaciones de datos:** {len(funds_subset)}")
+                                
+                                if len(funds_subset) > 1:
+                                    funds_subset = funds_subset.set_index('Dates')
+                                    returns = funds_subset.pct_change().dropna()
+                                    
+                                    if len(returns) > 1:
+                                        corr_matrix = returns.corr()
+                                        st.write(f"**Observaciones de retornos:** {len(returns)}")
+                                        st.write(f"**Correlación promedio:** {corr_matrix.values[np.triu_indices_from(corr_matrix.values, k=1)].mean():.3f}")
+                                        st.write(f"**Correlación máxima:** {corr_matrix.values[np.triu_indices_from(corr_matrix.values, k=1)].max():.3f}")
+                                        
+                                        # Show correlation matrix
+                                        st.write("**Matriz de Correlación:**")
+                                        st.dataframe(corr_matrix.round(3))
+                                
+                                # Try to run the frontier calculation with debug output
+                                st.write("---")
+                                st.write("**Intentando calcular frontera eficiente:**")
+                                
+                                fund_names_dict = {}
+                                for _, row in selected_performance.iterrows():
+                                    fund_names_dict[row['Ticker']] = row['Fund Name']
+                                
+                                # Run with debug output
+                                result = create_efficient_frontier_chart(
+                                    funds_data, 
+                                    selected_funds, 
+                                    fund_names_dict, 
+                                    selected_performance,
+                                    debug_container
+                                )
+                                
+                        except Exception as e:
+                            st.write(f"Error en diagnóstico: {e}")
+            else:
+                st.info("Selecciona al menos 2 fondos para ver el análisis de frontera eficiente.")
+                
         else:
-            st.warning("No performance data available for the filtered funds.")
-    
-    else:
-        st.warning("No funds match the selected filters. Please adjust your filter criteria.")
+            st.warning("No hay datos de performance disponibles para los fondos filtrados.")
 
 if __name__ == "__main__":
     main()

@@ -39,6 +39,11 @@ ranking-fondos/
 
 ## 🎯 Funcionalidades Implementadas
 
+### ✅ Interfaz y Tema
+- **Modo Oscuro por Defecto:** Tema elegante y profesional
+- **Toggle de Tema:** Cambio dinámico entre modo oscuro y claro
+- **Gráficos Optimizados:** Colores y contrastes adaptados para cada tema
+
 ### ✅ Análisis de Performance
 - **Retornos:** YTD, MTD, mensual, 1Y, 2024, 2023, 2022
 - **Métricas de Riesgo:** Volatilidad, Max Drawdown, VaR, CVaR
