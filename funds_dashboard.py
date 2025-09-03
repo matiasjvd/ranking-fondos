@@ -247,19 +247,21 @@ def calculate_custom_score(df_performance, weights):
     try:
         df_scored = df_performance.copy()
         
-        # Define metrics and their direction (positive = higher is better)
+        # Define metrics and their direction for scoring
+        # IMPORTANT: Max Drawdown, VaR, CVaR are already NEGATIVE values from calculation
+        # So we need to handle them correctly to avoid double inversion
         metrics_to_score = {
-            'YTD Return (%)': 'positive',
-            'MTD Return (%)': 'positive', 
-            'Monthly Return (%)': 'positive',
-            '1Y Return (%)': 'positive',
-            '2024 Return (%)': 'positive',
-            '2023 Return (%)': 'positive',
-            '2022 Return (%)': 'positive',
-            'Max Drawdown (%)': 'negative',  # Lower is better
-            'Volatility (%)': 'negative',    # Lower is better
-            'VaR 5% (%)': 'negative',        # Lower is better (less negative)
-            'CVaR 5% (%)': 'negative'        # Lower is better (less negative)
+            'YTD Return (%)': 'positive',           # Higher return = better
+            'MTD Return (%)': 'positive',           # Higher return = better
+            'Monthly Return (%)': 'positive',       # Higher return = better
+            '1Y Return (%)': 'positive',            # Higher return = better
+            '2024 Return (%)': 'positive',          # Higher return = better
+            '2023 Return (%)': 'positive',          # Higher return = better
+            '2022 Return (%)': 'positive',          # Higher return = better
+            'Max Drawdown (%)': 'negative_value',   # Already negative, higher (less negative) = better
+            'Volatility (%)': 'negative',           # Positive value, lower = better
+            'VaR 5% (%)': 'negative_value',         # Already negative, higher (less negative) = better
+            'CVaR 5% (%)': 'negative_value'         # Already negative, higher (less negative) = better
         }
         
         # Calculate Z-scores for each metric
@@ -276,9 +278,16 @@ def calculate_custom_score(df_performance, weights):
                         # Calculate Z-score: (value - mean) / std
                         z_score = (df_scored[metric] - mean_val) / std_val
                         
-                        # For negative metrics, invert the Z-score (lower values get higher scores)
+                        # Handle different metric types correctly
                         if direction == 'negative':
+                            # For positive values where lower is better (e.g., Volatility)
                             z_score = -z_score
+                        elif direction == 'negative_value':
+                            # For already negative values where higher (less negative) is better
+                            # (e.g., Max Drawdown: -10% is better than -20%)
+                            # Don't invert - higher Z-score already means less negative (better)
+                            pass  # Keep z_score as is
+                        # For 'positive' direction, keep z_score as is (higher = better)
                         
                         z_scores[metric] = z_score
                     else:
@@ -1061,7 +1070,8 @@ def main():
     
     # Custom Scoring System
     st.sidebar.markdown("### 🎯 Custom Fund Ranking")
-    st.sidebar.markdown("Ajusta los pesos para crear tu score personalizado (suman automáticamente 100%):")
+    st.sidebar.markdown("Ajusta los pesos para crear tu score personalizado:")
+    st.sidebar.markdown("💡 *Los pesos se normalizan automáticamente para sumar 100%*")
     
     # Weight sliders for each metric (raw values, will be normalized)
     raw_weights = {}
@@ -1087,20 +1097,48 @@ def main():
     
     # Normalize weights to sum to 100%
     total_raw_weight = sum(raw_weights.values())
+    
+    # Show current raw weight sum with dynamic color
+    if total_raw_weight == 100:
+        st.sidebar.success(f"🎯 Suma actual: {total_raw_weight}% (Perfecto!)")
+    elif total_raw_weight > 100:
+        st.sidebar.warning(f"⚠️ Suma actual: {total_raw_weight}% (Se normalizará a 100%)")
+    elif total_raw_weight > 0:
+        st.sidebar.info(f"📊 Suma actual: {total_raw_weight}% (Se normalizará a 100%)")
+    else:
+        st.sidebar.error(f"❌ Suma actual: {total_raw_weight}% (Todos los pesos en 0)")
+    
     if total_raw_weight > 0:
         weights = {metric: (weight / total_raw_weight) * 100 for metric, weight in raw_weights.items()}
     else:
         # If all weights are 0, distribute equally
         weights = {metric: 100/len(raw_weights) for metric in raw_weights.keys()}
     
-    # Show normalized weights
-    st.sidebar.success(f"✅ Pesos normalizados (suman 100%)")
+    # Show normalization info
+    st.sidebar.markdown("**Pesos finales (normalizados):**")
     
-    # Show top 3 weights for reference
-    sorted_weights = sorted(weights.items(), key=lambda x: x[1], reverse=True)[:3]
-    for metric, weight in sorted_weights:
-        metric_short = metric.replace(' (%)', '').replace('Return', 'Ret')
-        st.sidebar.write(f"• {metric_short}: {weight:.1f}%")
+    # Show top 5 weights for reference with better formatting
+    sorted_weights = sorted(weights.items(), key=lambda x: x[1], reverse=True)[:5]
+    for i, (metric, weight) in enumerate(sorted_weights):
+        metric_short = metric.replace(' (%)', '').replace('Return', 'Ret').replace('Drawdown', 'DD')
+        
+        # Add emoji for top metrics
+        if i == 0:
+            emoji = "🥇"
+        elif i == 1:
+            emoji = "🥈"
+        elif i == 2:
+            emoji = "🥉"
+        else:
+            emoji = "📊"
+            
+        # Color code based on weight
+        if weight >= 20:
+            st.sidebar.markdown(f"{emoji} **{metric_short}**: **{weight:.1f}%**")
+        elif weight >= 10:
+            st.sidebar.write(f"{emoji} {metric_short}: {weight:.1f}%")
+        else:
+            st.sidebar.write(f"{emoji} {metric_short}: {weight:.1f}%", help="Peso menor")
     
     # Z-score explanation
     with st.sidebar.expander("ℹ️ Sobre el Z-Score"):
