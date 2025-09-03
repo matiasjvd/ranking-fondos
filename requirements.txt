@@ -1,0 +1,18 @@
+# Core data processing
+pandas>=1.5.0
+numpy>=1.21.0
+
+# Streamlit for web dashboard
+streamlit>=1.28.0
+
+# Plotting and visualization
+plotly>=5.15.0
+
+# Portfolio optimization
+cvxpy>=1.3.0
+
+# PDF generation
+reportlab>=4.0.0
+
+# Excel file processing (for data conversion)
+openpyxl>=3.1.0
