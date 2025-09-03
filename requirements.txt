@@ -16,3 +16,5 @@ reportlab>=4.0.0
 
 # Excel file processing (for data conversion)
 openpyxl>=3.1.0
+
+xlsxwriter>=3.1.0
