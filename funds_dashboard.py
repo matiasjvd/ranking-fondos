@@ -145,14 +145,6 @@ def calculate_performance_metrics(funds_df, fund_ticker):
         else:
             ytd_return = 0
         
-        # MTD Return (Month-to-Date)
-        mtd_start = pd.to_datetime(f'{current_date.year}-{current_date.month:02d}-01')
-        mtd_data = prices[prices['Dates'] >= mtd_start]
-        if len(mtd_data) > 1:
-            mtd_return = ((mtd_data[fund_ticker].iloc[-1] / mtd_data[fund_ticker].iloc[0]) - 1) * 100
-        else:
-            mtd_return = 0
-        
         # Monthly Return (last 30 days)
         monthly_start = current_date - timedelta(days=30)
         monthly_data = prices[prices['Dates'] >= monthly_start]
@@ -226,7 +218,6 @@ def calculate_performance_metrics(funds_df, fund_ticker):
         
         return {
             'YTD Return (%)': ytd_return,
-            'MTD Return (%)': mtd_return,
             'Monthly Return (%)': monthly_return,
             '1Y Return (%)': return_1y,
             '2024 Return (%)': return_2024,
@@ -252,7 +243,6 @@ def calculate_custom_score(df_performance, weights):
         # So we need to handle them correctly to avoid double inversion
         metrics_to_score = {
             'YTD Return (%)': 'positive',           # Higher return = better
-            'MTD Return (%)': 'positive',           # Higher return = better
             'Monthly Return (%)': 'positive',       # Higher return = better
             '1Y Return (%)': 'positive',            # Higher return = better
             '2024 Return (%)': 'positive',          # Higher return = better
@@ -641,7 +631,7 @@ def create_excel_report(df_performance, chart_fig, frontier_fig, weights, filter
             
             # Performance metrics breakdown
             if not df_performance.empty:
-                perf_cols = ['Fund Name', 'Ticker', 'YTD Return (%)', 'MTD Return (%)', 'Monthly Return (%)', 
+                perf_cols = ['Fund Name', 'Ticker', 'YTD Return (%)', 'Monthly Return (%)', 
                            '1Y Return (%)', '2024 Return (%)', '2023 Return (%)', '2022 Return (%)']
                 available_perf_cols = [col for col in perf_cols if col in df_performance.columns]
                 perf_df = df_performance[available_perf_cols].copy()
@@ -1081,7 +1071,7 @@ def main():
     with col1:
         st.markdown("**Retornos**")
         raw_weights['YTD Return (%)'] = st.slider("YTD Return", 0, 100, 20, 5)
-        raw_weights['MTD Return (%)'] = st.slider("MTD Return", 0, 100, 10, 5)
+        raw_weights['Monthly Return (%)'] = st.slider("Monthly Return", 0, 100, 15, 5)
         raw_weights['1Y Return (%)'] = st.slider("1Y Return", 0, 100, 25, 5)
         raw_weights['2024 Return (%)'] = st.slider("2024 Return", 0, 100, 15, 5)
         raw_weights['2023 Return (%)'] = st.slider("2023 Return", 0, 100, 10, 5)
@@ -1089,9 +1079,8 @@ def main():
     with col2:
         st.markdown("**Riesgo**")
         raw_weights['2022 Return (%)'] = st.slider("2022 Return", 0, 100, 5, 5)
-        raw_weights['Monthly Return (%)'] = st.slider("Monthly Return", 0, 100, 5, 5)
-        raw_weights['Max Drawdown (%)'] = st.slider("Max Drawdown", 0, 100, 5, 5)
-        raw_weights['Volatility (%)'] = st.slider("Volatility", 0, 100, 5, 5)
+        raw_weights['Max Drawdown (%)'] = st.slider("Max Drawdown", 0, 100, 10, 5)
+        raw_weights['Volatility (%)'] = st.slider("Volatility", 0, 100, 10, 5)
         raw_weights['VaR 5% (%)'] = st.slider("VaR 5%", 0, 100, 5, 5)
         raw_weights['CVaR 5% (%)'] = st.slider("CVaR 5%", 0, 100, 5, 5)
     
@@ -1250,7 +1239,7 @@ def main():
             
             # Format percentage columns for display
             display_df = df_scored.copy()
-            percentage_cols = ['YTD Return (%)', 'MTD Return (%)', 'Monthly Return (%)', '1Y Return (%)',
+            percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', '1Y Return (%)',
                              '2024 Return (%)', '2023 Return (%)', '2022 Return (%)', 'Max Drawdown (%)', 
                              'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
             
