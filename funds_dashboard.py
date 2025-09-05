@@ -1159,17 +1159,21 @@ def main():
         if st.button("YTD", use_container_width=True):
             st.session_state.chart_start_date = pd.to_datetime(f'{max_date.year}-01-01').date()
             st.session_state.chart_end_date = max_date
+            st.rerun()
         if st.button("1 Year", use_container_width=True):
             st.session_state.chart_start_date = max_date - timedelta(days=365)
             st.session_state.chart_end_date = max_date
+            st.rerun()
     
     with shortcut_cols[1]:
         if st.button("2 Years", use_container_width=True):
             st.session_state.chart_start_date = max_date - timedelta(days=730)
             st.session_state.chart_end_date = max_date
+            st.rerun()
         if st.button("1 Month", use_container_width=True):
             st.session_state.chart_start_date = max_date - timedelta(days=30)
             st.session_state.chart_end_date = max_date
+            st.rerun()
     
     # Initialize session state for dates if not exists
     if 'chart_start_date' not in st.session_state:
@@ -1194,9 +1198,18 @@ def main():
         key="end_date_input"
     )
     
-    # Update session state
-    st.session_state.chart_start_date = chart_start_date
-    st.session_state.chart_end_date = chart_end_date
+    # Update session state and trigger rerun if dates changed
+    date_changed = False
+    if st.session_state.chart_start_date != chart_start_date:
+        st.session_state.chart_start_date = chart_start_date
+        date_changed = True
+    if st.session_state.chart_end_date != chart_end_date:
+        st.session_state.chart_end_date = chart_end_date
+        date_changed = True
+    
+    # Force rerun if dates changed to ensure chart updates
+    if date_changed:
+        st.rerun()
     
     # MAIN CONTENT
     if not filtered_funds:
@@ -1414,6 +1427,9 @@ def main():
                 st.markdown(f"**Mostrando {len(selected_funds)} fondos seleccionados desde {chart_start_date} hasta {chart_end_date}**")
                 
                 # Create and display chart with custom date range
+                # Add unique key based on dates and funds to force refresh
+                chart_key = f"chart_{chart_start_date}_{chart_end_date}_{len(selected_funds)}"
+                
                 chart = create_cumulative_returns_chart(
                     funds_data, 
                     selected_funds, 
@@ -1421,7 +1437,7 @@ def main():
                     pd.to_datetime(chart_end_date)
                 )
                 if chart:
-                    st.plotly_chart(chart, use_container_width=True)
+                    st.plotly_chart(chart, use_container_width=True, key=chart_key)
                 
                 # Show selected funds summary (from scored dataframe)
                 selected_performance = df_scored[df_scored['Ticker'].isin(selected_funds)]
