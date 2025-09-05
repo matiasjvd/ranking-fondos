@@ -185,40 +185,31 @@ class PortfolioManager:
             return None
     
     @staticmethod
-    def calculate_portfolio_metrics(funds_data, selected_funds, weights, start_date, end_date):
-        """Calcular métricas del portafolio combinado"""
+    def calculate_portfolio_metrics(funds_data, selected_funds, weights, start_date=None, end_date=None, returns_data=None):
+        """Calcular métricas del portafolio combinado - OPTIMIZADO"""
         try:
-            funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
-            filtered_data = funds_data[(funds_data['Dates'] >= start_date) & (funds_data['Dates'] <= end_date)].copy()
-            
-            if filtered_data.empty:
-                return None
-            
-            # Calcular retornos del portafolio
-            portfolio_returns = []
-            
-            for _, row in filtered_data.iterrows():
-                daily_return = 0
-                for ticker in selected_funds:
-                    if ticker in filtered_data.columns and pd.notna(row[ticker]):
-                        weight = weights.get(ticker, 0) / 100  # Convert percentage to decimal
-                        if len(filtered_data) > 1:
-                            # Calculate daily return for this fund
-                            prev_idx = filtered_data.index.get_loc(row.name) - 1
-                            if prev_idx >= 0:
-                                prev_price = filtered_data.iloc[prev_idx][ticker]
-                                if pd.notna(prev_price) and prev_price > 0:
-                                    fund_return = (row[ticker] - prev_price) / prev_price
-                                    daily_return += weight * fund_return
+            # OPTIMIZACIÓN: Si ya tenemos los datos de retornos, usarlos directamente
+            if returns_data is not None:
+                returns_df = returns_data
+            else:
+                # Calcular retornos si no se proporcionan
+                funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
+                relevant_columns = ['Dates'] + [fund for fund in selected_funds if fund in funds_data.columns]
+                filtered_data = funds_data[relevant_columns].dropna()
                 
-                portfolio_returns.append(daily_return)
+                if filtered_data.empty:
+                    return None
+                
+                returns_df = filtered_data.set_index('Dates').pct_change().dropna()
             
-            portfolio_returns = pd.Series(portfolio_returns).dropna()
-            
-            if len(portfolio_returns) < 2:
+            if len(returns_df) < 2:
                 return None
             
-            # Calculate metrics
+            # OPTIMIZACIÓN: Cálculo vectorizado de retornos del portafolio
+            weights_array = np.array([weights.get(fund, 0) / 100 for fund in returns_df.columns])
+            portfolio_returns = returns_df.dot(weights_array)
+            
+            # Calculate metrics (ya optimizado)
             total_return = (1 + portfolio_returns).prod() - 1
             annualized_return = ((1 + total_return) ** (252 / len(portfolio_returns))) - 1
             volatility = portfolio_returns.std() * np.sqrt(252)
@@ -250,97 +241,83 @@ class PortfolioManager:
     
     @staticmethod
     def calculate_efficient_frontier(funds_data, selected_funds, start_date=None, end_date=None):
-        """Calcular frontera eficiente para fondos del carrito usando TODA la historia disponible"""
+        """Calcular frontera eficiente OPTIMIZADA para fondos del carrito"""
         try:
             funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
-            # USAR TODA LA HISTORIA DISPONIBLE - no filtrar por fechas para mejor estimación
-            # Cada fondo tiene diferente historia y queremos usar toda la información disponible
-            filtered_data = funds_data.copy()
             
-            if filtered_data.empty or len(selected_funds) < 2:
+            if len(selected_funds) < 2:
                 return None
             
-            # Calculate returns for selected funds usando toda la historia disponible
-            returns_data = {}
-            st.info("📊 **Usando toda la historia disponible para cada fondo:**")
+            # OPTIMIZACIÓN 1: Usar solo los fondos seleccionados y período común
+            relevant_columns = ['Dates'] + [fund for fund in selected_funds if fund in funds_data.columns]
+            filtered_data = funds_data[relevant_columns].dropna()
             
-            for fund in selected_funds:
-                if fund in filtered_data.columns:
-                    fund_data = filtered_data[['Dates', fund]].dropna()
-                    if len(fund_data) > 1:
-                        fund_data = fund_data.sort_values('Dates')
-                        start_date_fund = fund_data['Dates'].min().strftime('%Y-%m-%d')
-                        end_date_fund = fund_data['Dates'].max().strftime('%Y-%m-%d')
-                        st.caption(f"• **{fund}**: {start_date_fund} a {end_date_fund} ({len(fund_data)} observaciones)")
-                        
-                        returns = fund_data[fund].pct_change().dropna()
-                        if len(returns) > 10:  # Need sufficient data
-                            returns_data[fund] = returns
-            
-            if len(returns_data) < 2:
+            if len(filtered_data) < 50:  # Mínimo 50 observaciones para estabilidad
+                st.warning(f"⚠️ Datos insuficientes: {len(filtered_data)} observaciones (mínimo 50)")
                 return None
             
-            # Create returns dataframe - usar período común donde todos los fondos tienen datos
-            returns_df = pd.DataFrame(returns_data)
-            returns_df = returns_df.dropna()
+            # OPTIMIZACIÓN 2: Calcular retornos una sola vez
+            returns_df = filtered_data.set_index('Dates').pct_change().dropna()
             
-            if len(returns_df) < 10:
-                st.warning(f"⚠️ Datos insuficientes en período común: {len(returns_df)} observaciones (mínimo 10)")
+            if len(returns_df) < 30:
+                st.warning(f"⚠️ Retornos insuficientes: {len(returns_df)} observaciones")
                 return None
             
-            # Mostrar información del período común usado
-            if len(returns_df) > 0:
-                st.success(f"✅ **Período común para frontera eficiente**: {len(returns_df)} observaciones de retornos diarios")
+            st.success(f"✅ **Usando {len(returns_df)} observaciones de retornos diarios**")
             
-            # Calculate covariance matrix and expected returns
-            cov_matrix = returns_df.cov() * 252  # Annualize
-            expected_returns = returns_df.mean() * 252  # Annualize
+            # OPTIMIZACIÓN 3: Cálculos vectorizados
+            expected_returns = returns_df.mean() * 252  # Anualizados
+            cov_matrix = returns_df.cov() * 252  # Anualizada
             
+            # OPTIMIZACIÓN 4: Menos puntos en la frontera (25 en lugar de 50)
+            n_points = 25
+            target_returns = np.linspace(expected_returns.min(), expected_returns.max(), n_points)
+            
+            efficient_portfolios = []
             n_assets = len(expected_returns)
             
-            # Generate efficient frontier points
-            target_returns = np.linspace(expected_returns.min(), expected_returns.max(), 50)
-            efficient_portfolios = []
-            
+            # OPTIMIZACIÓN 5: Solver más rápido y configuración optimizada
             for target in target_returns:
                 try:
-                    # Optimization variables
                     weights = cp.Variable(n_assets)
-                    
-                    # Objective function: minimize variance
                     portfolio_variance = cp.quad_form(weights, cov_matrix.values)
                     
-                    # Constraints
                     constraints = [
-                        cp.sum(weights) == 1,  # Sum of weights = 1
-                        weights >= 0,  # No short selling
-                        expected_returns.values @ weights == target  # Target return
+                        cp.sum(weights) == 1,
+                        weights >= 0,
+                        expected_returns.values @ weights == target
                     ]
                     
-                    # Solve optimization
                     problem = cp.Problem(cp.Minimize(portfolio_variance), constraints)
-                    problem.solve(solver=cp.ECOS, verbose=False)
+                    # Usar OSQP que es más rápido para problemas cuadráticos
+                    problem.solve(solver=cp.OSQP, verbose=False, eps_abs=1e-4, eps_rel=1e-4)
                     
                     if problem.status == cp.OPTIMAL:
                         portfolio_return = target
                         portfolio_risk = np.sqrt(problem.value)
                         efficient_portfolios.append({
-                            'return': portfolio_return * 100,
-                            'risk': portfolio_risk * 100,
+                            'return': portfolio_return * 100,  # Ya anualizado
+                            'risk': portfolio_risk * 100,     # Ya anualizado
                             'weights': weights.value
                         })
                 
                 except:
                     continue
             
+            # OPTIMIZACIÓN 6: Retornar datos ya procesados
+            individual_risks = np.sqrt(np.diag(cov_matrix)) * 100  # Ya anualizados
+            individual_returns = expected_returns * 100  # Ya anualizados
+            
             return {
                 'portfolios': efficient_portfolios,
                 'assets': list(expected_returns.index),
-                'expected_returns': expected_returns * 100,
-                'risks': np.sqrt(np.diag(cov_matrix)) * 100
+                'expected_returns': individual_returns,
+                'risks': individual_risks,
+                'returns_data': returns_df  # Para cálculos adicionales
             }
             
         except Exception as e:
+            st.error(f"Error calculando frontera eficiente: {e}")
             return None
     
     @staticmethod
@@ -723,13 +700,12 @@ class PortfolioManager:
                             hovertemplate='Asset: %{text}<br>Risk: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>'
                         ))
                         
-                        # Calculate current portfolio metrics
+                        # Calculate current portfolio metrics using same data as efficient frontier
                         portfolio_metrics = PortfolioManager.calculate_portfolio_metrics(
                             funds_data, 
                             list(st.session_state.selected_funds), 
                             st.session_state.portfolio_weights,
-                            pd.to_datetime(start_date),
-                            pd.to_datetime(end_date)
+                            returns_data=efficient_frontier['returns_data']  # Usar los mismos datos
                         )
                         
                         if portfolio_metrics:
@@ -766,16 +742,31 @@ class PortfolioManager:
                         if portfolio_metrics:
                             st.markdown("### Portfolio Analysis")
                             
-                            # Compare current portfolio with efficient frontier
-                            col1, col2, col3, col4 = st.columns(4)
+                            # Show current portfolio composition
+                            col1, col2 = st.columns([1, 1])
+                            
                             with col1:
-                                st.metric("Your Portfolio Return", f"{portfolio_metrics['annualized_return']:.2f}%")
+                                st.markdown("#### Current Portfolio Composition")
+                                composition_data = []
+                                for ticker in st.session_state.selected_funds:
+                                    weight = st.session_state.portfolio_weights.get(ticker, 0)
+                                    composition_data.append({
+                                        'Asset': ticker,
+                                        'Weight (%)': f"{weight:.1f}%"
+                                    })
+                                
+                                composition_df = pd.DataFrame(composition_data)
+                                st.dataframe(composition_df, use_container_width=True, hide_index=True)
+                            
                             with col2:
-                                st.metric("Your Portfolio Risk", f"{portfolio_metrics['volatility']:.2f}%")
-                            with col3:
-                                st.metric("Your Sharpe Ratio", f"{portfolio_metrics['sharpe_ratio']:.3f}")
-                            with col4:
-                                st.metric("Max Drawdown", f"{portfolio_metrics['max_drawdown']:.2f}%")
+                                st.markdown("#### Portfolio Metrics (Annualized)")
+                                col2a, col2b = st.columns(2)
+                                with col2a:
+                                    st.metric("Return", f"{portfolio_metrics['annualized_return']:.2f}%")
+                                    st.metric("Sharpe Ratio", f"{portfolio_metrics['sharpe_ratio']:.3f}")
+                                with col2b:
+                                    st.metric("Risk", f"{portfolio_metrics['volatility']:.2f}%")
+                                    st.metric("Max Drawdown", f"{portfolio_metrics['max_drawdown']:.2f}%")
                             
                             # Find closest point on efficient frontier
                             min_distance = float('inf')
