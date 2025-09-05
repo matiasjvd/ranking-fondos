@@ -1424,17 +1424,17 @@ def main():
             selected_funds = [fund_options[name] for name in selected_fund_names]
             
             if selected_funds:
-                st.markdown(f"**Mostrando {len(selected_funds)} fondos seleccionados desde {chart_start_date} hasta {chart_end_date}**")
+                st.markdown(f"**Mostrando {len(selected_funds)} fondos seleccionados desde {st.session_state.chart_start_date} hasta {st.session_state.chart_end_date}**")
                 
                 # Create and display chart with custom date range
                 # Add unique key based on dates and funds to force refresh
-                chart_key = f"chart_{chart_start_date}_{chart_end_date}_{len(selected_funds)}"
+                chart_key = f"chart_{st.session_state.chart_start_date}_{st.session_state.chart_end_date}_{len(selected_funds)}"
                 
                 chart = create_cumulative_returns_chart(
                     funds_data, 
                     selected_funds, 
-                    pd.to_datetime(chart_start_date), 
-                    pd.to_datetime(chart_end_date)
+                    pd.to_datetime(st.session_state.chart_start_date), 
+                    pd.to_datetime(st.session_state.chart_end_date)
                 )
                 if chart:
                     st.plotly_chart(chart, use_container_width=True, key=chart_key)
