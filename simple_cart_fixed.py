@@ -702,19 +702,22 @@ class PortfolioManager:
                 # Performance chart
                 st.markdown("### 📊 Evolución del Portafolio")
                 
-                # Create cumulative performance chart
+                # Create cumulative performance chart with dates on x-axis
                 cumulative_returns = (1 + portfolio_metrics['portfolio_returns']).cumprod() * 100
                 
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
+                    x=cumulative_returns.index,
                     y=cumulative_returns,
                     mode='lines',
                     name='Portafolio',
-                    line=dict(color='#10b981', width=2)
+                    line=dict(color='#10b981', width=2),
+                    hovertemplate='Fecha: %{x|%Y-%m-%d}<br>Valor: %{y:.2f}<extra></extra>'
                 ))
                 
                 fig.update_layout(
                     title="Evolución del Portafolio (Base 100)",
+                    xaxis_title="Fecha",
                     yaxis_title="Valor (Base 100)",
                     height=400,
                     plot_bgcolor='rgba(0,0,0,0)',
