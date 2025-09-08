@@ -172,6 +172,8 @@ def render_funds_analysis_tab(funds_data, etf_dict):
     weights['YTD Return (%)'] = st.sidebar.slider("YTD Return", 0, 100, 20)
     weights['1Y Return (%)'] = st.sidebar.slider("1Y Return", 0, 100, 25)
     weights['2024 Return (%)'] = st.sidebar.slider("2024 Return", 0, 100, 15)
+    weights['2023 Return (%)'] = st.sidebar.slider("2023 Return", 0, 100, 10)
+    weights['2022 Return (%)'] = st.sidebar.slider("2022 Return", 0, 100, 5)
     weights['Max Drawdown (%)'] = st.sidebar.slider("Max Drawdown", 0, 100, 15)
     weights['Volatility (%)'] = st.sidebar.slider("Volatility", 0, 100, 10)
     weights['VaR 5% (%)'] = st.sidebar.slider("VaR 5%", 0, 100, 10)

@@ -157,7 +157,7 @@ def calculate_custom_score(df, weights):
     score_components = {}
     
     # Returns (higher is better)
-    return_cols = ['YTD Return (%)', '1Y Return (%)', '2024 Return (%)']
+    return_cols = ['YTD Return (%)', '1Y Return (%)', '2024 Return (%)', '2023 Return (%)', '2022 Return (%)']
     for col in return_cols:
         if col in df.columns:
             normalized = (df[col] - df[col].min()) / (df[col].max() - df[col].min())
@@ -377,9 +377,11 @@ def main():
     # Custom scoring weights
     st.sidebar.markdown("## Scoring Weights")
     weights = {
-        'YTD Return (%)': st.sidebar.slider("YTD Return", 0.0, 1.0, 0.3),
-        '1Y Return (%)': st.sidebar.slider("1Y Return", 0.0, 1.0, 0.3),
-        '2024 Return (%)': st.sidebar.slider("2024 Return", 0.0, 1.0, 0.2),
+        'YTD Return (%)': st.sidebar.slider("YTD Return", 0.0, 1.0, 0.25),
+        '1Y Return (%)': st.sidebar.slider("1Y Return", 0.0, 1.0, 0.25),
+        '2024 Return (%)': st.sidebar.slider("2024 Return", 0.0, 1.0, 0.15),
+        '2023 Return (%)': st.sidebar.slider("2023 Return", 0.0, 1.0, 0.10),
+        '2022 Return (%)': st.sidebar.slider("2022 Return", 0.0, 1.0, 0.05),
         'Volatility (%)': st.sidebar.slider("Low Volatility", 0.0, 1.0, 0.1),
         'Max Drawdown (%)': st.sidebar.slider("Low Drawdown", 0.0, 1.0, 0.1)
     }
