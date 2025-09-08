@@ -677,7 +677,7 @@ class PortfolioManager:
             
             if portfolio_metrics:
                 # Mostrar información del período analizado
-                st.success(f"📊 **Período analizado**: {portfolio_metrics['start_date'].strftime('%Y-%m-%d')} a {portfolio_metrics['end_date'].strftime('%Y-%m-%d')} ({portfolio_metrics['period_days']} días de trading)")
+                st.success(f"📊 **Período analizado**: {portfolio_metrics['start_date'].strftime('%Y-%m-%d')} a {portfolio_metrics['end_date'].strftime('%Y-%m-%d')} ({portfolio_metrics['period_days']} días de historia)")
                 
                 # Display metrics
                 col1, col2, col3, col4 = st.columns(4)
