@@ -191,11 +191,21 @@ class PortfolioManager:
             # OPTIMIZACIÓN: Si ya tenemos los datos de retornos, usarlos directamente
             if returns_data is not None:
                 returns_df = returns_data
+                # Si se especifican fechas, filtrar los datos de retornos
+                if start_date is not None and end_date is not None:
+                    returns_df = returns_df[(returns_df.index >= start_date) & (returns_df.index <= end_date)]
             else:
                 # Calcular retornos si no se proporcionan
                 funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
-                relevant_columns = ['Dates'] + [fund for fund in selected_funds if fund in funds_data.columns]
-                filtered_data = funds_data[relevant_columns].dropna()
+                
+                # Filtrar por fechas si se proporcionan
+                if start_date is not None and end_date is not None:
+                    filtered_data = funds_data[(funds_data['Dates'] >= start_date) & (funds_data['Dates'] <= end_date)].copy()
+                else:
+                    filtered_data = funds_data.copy()
+                
+                relevant_columns = ['Dates'] + [fund for fund in selected_funds if fund in filtered_data.columns]
+                filtered_data = filtered_data[relevant_columns].dropna()
                 
                 if filtered_data.empty:
                     return None
@@ -233,7 +243,10 @@ class PortfolioManager:
                 'max_drawdown': max_drawdown * 100,
                 'var_5': var_5 * 100,
                 'cvar_5': cvar_5 * 100,
-                'portfolio_returns': portfolio_returns
+                'portfolio_returns': portfolio_returns,
+                'period_days': len(portfolio_returns),
+                'start_date': portfolio_returns.index.min() if len(portfolio_returns) > 0 else None,
+                'end_date': portfolio_returns.index.max() if len(portfolio_returns) > 0 else None
             }
             
         except Exception as e:
@@ -588,28 +601,84 @@ class PortfolioManager:
         # Análisis de portafolio
         st.markdown("## 📈 Análisis de Portafolio")
         
-        # Date range selector
+        # Analizar fechas de inception de los fondos seleccionados
         funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
+        
+        # Información de inception por fondo
+        st.markdown("### 📅 Fechas de Inception de Activos")
+        inception_info = []
+        portfolio_min_date = None
+        
+        for fund in st.session_state.selected_funds:
+            if fund in funds_data.columns:
+                fund_data = funds_data[['Dates', fund]].dropna()
+                if len(fund_data) > 0:
+                    inception_date = fund_data['Dates'].min()
+                    last_date = fund_data['Dates'].max()
+                    inception_info.append({
+                        'Asset': fund,
+                        'Inception Date': inception_date.strftime('%Y-%m-%d'),
+                        'Last Date': last_date.strftime('%Y-%m-%d'),
+                        'Days Available': len(fund_data)
+                    })
+                    
+                    # Encontrar la fecha más tardía de inception (cuando todos los fondos están disponibles)
+                    if portfolio_min_date is None or inception_date > portfolio_min_date:
+                        portfolio_min_date = inception_date
+        
+        if inception_info:
+            inception_df = pd.DataFrame(inception_info)
+            st.dataframe(inception_df, use_container_width=True, hide_index=True)
+            
+            if portfolio_min_date:
+                st.info(f"📊 **Portfolio completo disponible desde**: {portfolio_min_date.strftime('%Y-%m-%d')} (cuando todos los activos tienen datos)")
+        
+        # Date range selector con límites inteligentes
         min_date = funds_data['Dates'].min().date()
         max_date = funds_data['Dates'].max().date()
         
+        # Sugerir fecha de inicio basada en disponibilidad del portafolio
+        suggested_start = portfolio_min_date.date() if portfolio_min_date else min_date
+        default_start = max(suggested_start, max_date - pd.Timedelta(days=365).to_pytimedelta())
+        
         col_start, col_end = st.columns(2)
         with col_start:
-            start_date = st.date_input("Fecha de inicio:", value=max_date - pd.Timedelta(days=365), min_value=min_date, max_value=max_date)
+            start_date = st.date_input(
+                "Fecha de inicio:", 
+                value=default_start, 
+                min_value=min_date, 
+                max_value=max_date,
+                help=f"Portfolio completo disponible desde {suggested_start}"
+            )
         with col_end:
             end_date = st.date_input("Fecha de fin:", value=max_date, min_value=min_date, max_value=max_date)
         
         if start_date < end_date:
-            # Calculate portfolio metrics
+            # Verificar si todas las fechas están disponibles
+            missing_funds = []
+            for fund in st.session_state.selected_funds:
+                if fund in funds_data.columns:
+                    fund_data = funds_data[['Dates', fund]].dropna()
+                    fund_start = fund_data['Dates'].min().date()
+                    if fund_start > start_date:
+                        missing_funds.append(f"{fund} (disponible desde {fund_start})")
+            
+            if missing_funds:
+                st.warning(f"⚠️ **Fondos con datos faltantes en el período seleccionado:**\n" + "\n".join([f"• {fund}" for fund in missing_funds]))
+            
+            # Calculate portfolio metrics con fechas específicas
             portfolio_metrics = PortfolioManager.calculate_portfolio_metrics(
                 funds_data, 
                 st.session_state.selected_funds, 
                 st.session_state.portfolio_weights,
-                pd.to_datetime(start_date),
-                pd.to_datetime(end_date)
+                start_date=pd.to_datetime(start_date),
+                end_date=pd.to_datetime(end_date)
             )
             
             if portfolio_metrics:
+                # Mostrar información del período analizado
+                st.success(f"📊 **Período analizado**: {portfolio_metrics['start_date'].strftime('%Y-%m-%d')} a {portfolio_metrics['end_date'].strftime('%Y-%m-%d')} ({portfolio_metrics['period_days']} días de trading)")
+                
                 # Display metrics
                 col1, col2, col3, col4 = st.columns(4)
                 
