@@ -167,6 +167,11 @@ class PortfolioManager:
                 var_5 = 0
                 cvar_5 = 0
             
+            # Sharpe for individual fund (risk-free ~ 0)
+            ann_return = returns_clean.mean() * 252 if len(returns_clean) > 0 else 0
+            vol_ann_clean = returns_clean.std() * np.sqrt(252) if len(returns_clean) > 0 else 0
+            sharpe_ratio = (ann_return / vol_ann_clean) if vol_ann_clean > 0 else 0
+
             metrics = {
                 'YTD Return (%)': ytd_return,
                 'Monthly Return (%)': monthly_return,
@@ -174,7 +179,8 @@ class PortfolioManager:
                 'Volatility (%)': volatility,
                 'Max Drawdown (%)': max_drawdown,
                 'VaR 5% (%)': var_5,
-                'CVaR 5% (%)': cvar_5
+                'CVaR 5% (%)': cvar_5,
+                'Sharpe Ratio': sharpe_ratio
             }
             
             metrics.update(returns_by_year)
@@ -586,7 +592,7 @@ class PortfolioManager:
         if individual_metrics:
             df_individual = pd.DataFrame(individual_metrics)
             
-            # Format percentage columns
+            # Format percentage columns + Sharpe
             percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', '1Y Return (%)', 
                               '2024 Return (%)', '2023 Return (%)', '2022 Return (%)',
                               'Max Drawdown (%)', 'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
@@ -595,6 +601,8 @@ class PortfolioManager:
             for col in percentage_cols:
                 if col in display_df.columns:
                     display_df[col] = display_df[col].apply(lambda x: f"{x:.2f}%" if pd.notnull(x) else "N/A")
+            if 'Sharpe Ratio' in display_df.columns:
+                display_df['Sharpe Ratio'] = display_df['Sharpe Ratio'].apply(lambda x: f"{x:.3f}" if pd.notnull(x) else "N/A")
             
             st.dataframe(display_df, use_container_width=True)
         

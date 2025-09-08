@@ -167,14 +167,20 @@ def calculate_performance_metrics(funds_df, fund_ticker):
         drawdown = (cumulative - rolling_max) / rolling_max
         max_drawdown = drawdown.min() * 100
         
-        # VaR and CVaR (5% confidence level, annualized)
+        # VaR and CVaR (5% confidence level, annualized) + Sharpe
         returns_clean = prices['Returns'].dropna()
         if len(returns_clean) > 0:
             var_5 = np.percentile(returns_clean, 5) * np.sqrt(252) * 100
             cvar_5 = returns_clean[returns_clean <= np.percentile(returns_clean, 5)].mean() * np.sqrt(252) * 100
+            # Annualized return and Sharpe Ratio (risk-free ~ 0)
+            total_ret = (1 + returns_clean).prod() - 1
+            ann_return = ((1 + total_ret) ** (252 / len(returns_clean))) - 1
+            vol_ann = returns_clean.std() * np.sqrt(252)
+            sharpe_ratio = ann_return / vol_ann if vol_ann > 0 else 0
         else:
             var_5 = 0
             cvar_5 = 0
+            sharpe_ratio = 0
         
         metrics = {
             'YTD Return (%)': ytd_return,
@@ -183,7 +189,8 @@ def calculate_performance_metrics(funds_df, fund_ticker):
             'Volatility (%)': volatility,
             'Max Drawdown (%)': max_drawdown,
             'VaR 5% (%)': var_5,
-            'CVaR 5% (%)': cvar_5
+            'CVaR 5% (%)': cvar_5,
+            'Sharpe Ratio': sharpe_ratio
         }
         
         metrics.update(returns_by_year)
@@ -727,12 +734,16 @@ def main():
         if col in display_df.columns:
             display_df[col] = display_df[col].apply(lambda x: f"{x:.2f}%" if pd.notnull(x) else "N/A")
     
+    # Format Sharpe if present
+    if 'Sharpe Ratio' in display_df.columns:
+        display_df['Sharpe Ratio'] = display_df['Sharpe Ratio'].apply(lambda x: f"{x:.3f}" if pd.notnull(x) else "N/A")
+    
     if 'Custom Score' in display_df.columns:
         display_df['Custom Score'] = display_df['Custom Score'].apply(lambda x: f"{x:.1f}" if pd.notnull(x) else "N/A")
     
     # MOSTRAR PRIMERO LA TABLA COMPLETA
     st.markdown("## Fund Analysis Results")
-    final_cols = ['Ticker', 'Fund Name', 'Custom Score'] + percentage_cols
+    final_cols = ['Ticker', 'Fund Name', 'Custom Score', 'Sharpe Ratio'] + percentage_cols
     final_cols = [col for col in final_cols if col in display_df.columns]
     st.dataframe(display_df[final_cols], use_container_width=True)
     
@@ -774,6 +785,8 @@ def main():
                     metrics_text.append(f"1Y: {row['1Y Return (%)']}")
                 if 'Volatility (%)' in row:
                     metrics_text.append(f"Vol: {row['Volatility (%)']}")
+                if 'Sharpe Ratio' in row:
+                    metrics_text.append(f"Sharpe: {row['Sharpe Ratio']}")
                 if 'Max Drawdown (%)' in row:
                     metrics_text.append(f"DD: {row['Max Drawdown (%)']}")
                 
