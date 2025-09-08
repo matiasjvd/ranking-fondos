@@ -185,7 +185,6 @@ def calculate_performance_metrics(funds_df, fund_ticker):
         metrics = {
             'YTD Return (%)': ytd_return,
             'Monthly Return (%)': monthly_return,
-            '1Y Return (%)': return_1y,
             'Volatility (%)': volatility,
             'Max Drawdown (%)': max_drawdown,
             'VaR 5% (%)': var_5,
@@ -600,15 +599,13 @@ def main():
     # Performance filter
     st.sidebar.markdown("### 📊 Performance Filters")
     min_ytd = st.sidebar.number_input("Min YTD Return (%):", value=-100.0, step=1.0)
-    min_1y = st.sidebar.number_input("Min 1Y Return (%):", value=-100.0, step=1.0)
     max_volatility = st.sidebar.number_input("Max Volatility (%):", value=100.0, step=1.0)
     
     # Scoring weights configuration (IGUAL QUE EL ORIGINAL)
     st.sidebar.markdown("## ⚖️ Scoring Weights")
     
     weights = {}
-    weights['YTD Return (%)'] = st.sidebar.slider("YTD Return", 0, 100, 20)
-    weights['1Y Return (%)'] = st.sidebar.slider("1Y Return", 0, 100, 25)
+    weights['YTD Return (%)'] = st.sidebar.slider("YTD Return", 0, 100, 25)
     weights['2024 Return (%)'] = st.sidebar.slider("2024 Return", 0, 100, 15)
     weights['2023 Return (%)'] = st.sidebar.slider("2023 Return", 0, 100, 10)
     weights['2022 Return (%)'] = st.sidebar.slider("2022 Return", 0, 100, 5)
@@ -706,7 +703,6 @@ def main():
                 
                 # Apply performance filters
                 if (metrics['YTD Return (%)'] >= min_ytd and 
-                    metrics['1Y Return (%)'] >= min_1y and 
                     metrics['Volatility (%)'] <= max_volatility):
                     
                     row = {'Ticker': ticker, 'Fund Name': fund_name}
@@ -726,7 +722,7 @@ def main():
     display_df = df_scored.copy()
     
     # Format percentage columns
-    percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', '1Y Return (%)', 
+    percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', 
                       '2024 Return (%)', '2023 Return (%)', '2022 Return (%)',
                       'Max Drawdown (%)', 'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
     
@@ -781,8 +777,6 @@ def main():
                 metrics_text = []
                 if 'YTD Return (%)' in row:
                     metrics_text.append(f"YTD: {row['YTD Return (%)']}")
-                if '1Y Return (%)' in row:
-                    metrics_text.append(f"1Y: {row['1Y Return (%)']}")
                 if 'Volatility (%)' in row:
                     metrics_text.append(f"Vol: {row['Volatility (%)']}")
                 if 'Sharpe Ratio' in row:
