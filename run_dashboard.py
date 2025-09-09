@@ -10,7 +10,7 @@ import os
 def check_requirements():
     """Check if required packages are installed"""
     required_packages = [
-        'streamlit', 'pandas', 'numpy', 'plotly', 'cvxpy', 'reportlab'
+        'streamlit', 'pandas', 'numpy', 'plotly', 'cvxpy'
     ]
     
     missing_packages = []

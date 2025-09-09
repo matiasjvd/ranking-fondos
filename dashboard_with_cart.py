@@ -15,11 +15,7 @@ import os
 import cvxpy as cp
 import base64
 import io
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
+
 import warnings
 warnings.filterwarnings('ignore')
 
