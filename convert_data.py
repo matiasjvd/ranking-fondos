@@ -12,17 +12,17 @@ import pandas as pd
 from typing import Dict, Optional
 
 
-# === Rutas por defecto (puedes ajustarlas si cambian) ===
+# === Rutas por defecto (portables en cualquier entorno) ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Excel con nuevas acciones y precios (provisto por el usuario)
-DEFAULT_NEW_PRICES_XLSX = \
-    '/Users/matias/Desktop/Proyectos/ranking-fondos/Swiss_stocks_10-09-2025.xlsx'
+DEFAULT_NEW_PRICES_XLSX = os.path.join(BASE_DIR, 'Swiss_stocks_10-09-2025.xlsx')
 
 # Excel del diccionario actualizado (provisto por el usuario)
-DEFAULT_DICT_XLSX = \
-    '/Users/matias/Desktop/Proyectos/ranking-fondos/dict_temp_full_portfolio.xlsx'
+DEFAULT_DICT_XLSX = os.path.join(BASE_DIR, 'dict_temp_full_portfolio.xlsx')
 
 # CSVs de salida usados por el dashboard
-OUTPUT_DIR = '/Users/matias/Desktop/Proyectos/ranking-fondos/data'
+OUTPUT_DIR = os.path.join(BASE_DIR, 'data')
 PRICES_CSV = os.path.join(OUTPUT_DIR, 'funds_prices.csv')
 DICT_CSV = os.path.join(OUTPUT_DIR, 'funds_dictionary.csv')
 

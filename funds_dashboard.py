@@ -13,11 +13,6 @@ from datetime import datetime, timedelta
 import os
 
 import cvxpy as cp
-import base64
-import io
-
-import warnings
-warnings.filterwarnings('ignore')
 
 # SIMPLE CART INTEGRATION
 from simple_cart_fixed import PortfolioManager, integrate_portfolio_manager
@@ -86,8 +81,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data
-def load_data():
-    """Load funds data and dictionary from CSV files (IGUAL QUE EL ORIGINAL)"""
+def load_data(_prices_mtime: float = None, _dict_mtime: float = None):
+    """Load funds data and dictionary from CSV files. Cache se invalida con mtime."""
     try:
         # Get the directory where this script is located
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -423,7 +418,7 @@ def calculate_efficient_frontier_cvxpy(funds_df, fund_tickers, debug_container=N
         print(f"CVXPY efficient frontier calculation failed: {e}")
         return None
 
-def create_efficient_frontier_chart(funds_df, fund_tickers, fund_names_dict, df_performance, debug_container=None):
+def create_efficient_frontier_chart(funds_df, fund_tickers, fund_names_dict, debug_container=None):
     """Create efficient frontier chart - EXACT same logic as original dashboard"""
     try:
         # Calculate efficient frontier with CVXPY - same as original
@@ -504,9 +499,16 @@ def main():
     if integrate_portfolio_manager():
         return  # Si se muestra el análisis del portafolio, no mostrar el dashboard principal
     
-    # Load data
+    # Load data (pasando mtime para invalidar cache cuando cambien los CSV)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(script_dir, 'data')
+    funds_path = os.path.join(data_dir, 'funds_prices.csv')
+    dict_path = os.path.join(data_dir, 'funds_dictionary.csv')
+    prices_mtime = os.path.getmtime(funds_path) if os.path.exists(funds_path) else None
+    dict_mtime = os.path.getmtime(dict_path) if os.path.exists(dict_path) else None
+
     with st.spinner("Loading data..."):
-        funds_data, etf_dict = load_data()
+        funds_data, etf_dict = load_data(prices_mtime, dict_mtime)
     
     if funds_data is None or etf_dict is None:
         return
@@ -516,6 +518,21 @@ def main():
     
     # SIDEBAR FILTERS
     st.sidebar.markdown("## Analysis Filters")
+
+    # Refresh data: rebuild CSVs from Excel in repo and clear cache
+    if st.sidebar.button("🔄 Refresh data (rebuild CSVs)"):
+        try:
+            from convert_data import convert_excel_to_csv
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            dict_xlsx = os.path.join(script_dir, 'dict_temp_full_portfolio.xlsx')
+            new_prices_xlsx = os.path.join(script_dir, 'Swiss_stocks_10-09-2025.xlsx')
+            convert_excel_to_csv(dict_xlsx_path=dict_xlsx, new_prices_xlsx=new_prices_xlsx)
+            # Clear cached data and rerun
+            load_data.clear()
+            st.success("Data refreshed. Reloading...")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Error refreshing data: {e}")
     
     # Prepare data for filters
     funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
@@ -899,7 +916,6 @@ def main():
                     funds_data,  # Usar toda la historia disponible, no filtrada por período de análisis
                     frontier_funds, 
                     fund_names_dict, 
-                    df_scored,
                     debug_container
                 )
                 
