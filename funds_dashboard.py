@@ -495,6 +495,15 @@ def create_efficient_frontier_chart(funds_df, fund_tickers, fund_names_dict, deb
 def main():
     """Main dashboard function with integrated simple cart"""
     
+    # Enlace a Macro Dashboard BVC (botón estático arriba, abre en nueva pestaña)
+    st.sidebar.markdown(
+        """
+        <a href=\"https://dashboard-macro-bvc.streamlit.app/\" target=\"_blank\" rel=\"noopener noreferrer\"
+           style=\"display:block; text-align:center; padding:0.6rem 1rem; border-radius:8px; border:1px solid #475569; background-color:#334155; color:#f1f5f9; text-decoration:none; font-weight:600; margin-bottom:0.75rem;\">\n            🌐 Macro Dashboard BVC\n        </a>
+        """,
+        unsafe_allow_html=True
+    )
+    
     # INTEGRAR GESTOR DE PORTAFOLIO
     if integrate_portfolio_manager():
         return  # Si se muestra el análisis del portafolio, no mostrar el dashboard principal

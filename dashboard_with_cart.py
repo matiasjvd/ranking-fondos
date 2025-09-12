@@ -287,6 +287,17 @@ def main():
     
     # INTEGRAR CARRITO DE PORTAFOLIOS
     PortfolioCart.initialize()
+
+    # Enlace a Macro Dashboard BVC (botón estático arriba, abre en nueva pestaña)
+    st.sidebar.markdown(
+        """
+        <a href="https://dashboard-macro-bvc.streamlit.app/" target="_blank" rel="noopener noreferrer"
+           style="display:block; text-align:center; padding:0.6rem 1rem; border-radius:8px; border:1px solid #475569; background-color:#334155; color:#f1f5f9; text-decoration:none; font-weight:600; margin-bottom:0.75rem;">
+            🌐 Macro Dashboard BVC
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
     
     # Verificar si mostrar la pestaña de gestión de portafolio
     if st.session_state.get('show_portfolio_tab', False):
@@ -300,17 +311,6 @@ def main():
     if funds_data is None or etf_dict is None:
         return
 
-    # Enlace a Macro Dashboard BVC (botón estático arriba, abre en nueva pestaña)
-    st.sidebar.markdown(
-        """
-        <a href="https://dashboard-macro-bvc.streamlit.app/" target="_blank" rel="noopener noreferrer"
-           style="display:block; text-align:center; padding:0.6rem 1rem; border-radius:8px; border:1px solid #475569; background-color:#334155; color:#f1f5f9; text-decoration:none; font-weight:600; margin-bottom:0.75rem;">
-            🌐 Macro Dashboard BVC
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
-    
     # RENDERIZAR WIDGET DEL CARRITO EN SIDEBAR
     PortfolioCart.render_cart_widget()
     
