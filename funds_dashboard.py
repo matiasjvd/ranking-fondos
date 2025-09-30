@@ -119,12 +119,28 @@ def calculate_performance_metrics(funds_df, fund_ticker):
         if fund_ticker not in funds_df.columns:
             return None
         
-        prices = funds_df[['Dates', fund_ticker]].dropna()
+        # Get all data for this fund
+        prices = funds_df[['Dates', fund_ticker]].copy()
+        prices['Dates'] = pd.to_datetime(prices['Dates'])
+        prices = prices.sort_values('Dates').reset_index(drop=True)
+        
+        # Find the first valid price (fund inception date)
+        first_valid_idx = prices[fund_ticker].first_valid_index()
+        if first_valid_idx is None:
+            return None
+        
+        # Only use data from inception date onwards
+        prices = prices.iloc[first_valid_idx:].reset_index(drop=True)
+        
+        # Forward fill prices to handle missing data after inception
+        prices[fund_ticker] = prices[fund_ticker].ffill()
+        
+        # Remove any remaining NaN (shouldn't happen after ffill from inception)
+        prices = prices.dropna()
+        
         if len(prices) < 2:
             return None
         
-        prices['Dates'] = pd.to_datetime(prices['Dates'])
-        prices = prices.sort_values('Dates').reset_index(drop=True)
         prices['Returns'] = prices[fund_ticker].pct_change()
         
         current_date = prices['Dates'].max()
@@ -167,8 +183,19 @@ def calculate_performance_metrics(funds_df, fund_ticker):
         # VaR and CVaR (5% confidence level, annualized) + Sharpe
         returns_clean = prices['Returns'].dropna()
         if len(returns_clean) > 0:
-            var_5 = np.percentile(returns_clean, 5) * np.sqrt(252) * 100
-            cvar_5 = returns_clean[returns_clean <= np.percentile(returns_clean, 5)].mean() * np.sqrt(252) * 100
+            # Standard VaR/CVaR calculation using all returns
+            # This is correct for all fund types, including low-liquidity funds
+            daily_var_5 = np.percentile(returns_clean, 5)
+            var_5 = daily_var_5 * np.sqrt(252) * 100
+            
+            threshold = np.percentile(returns_clean, 5)
+            worst_returns = returns_clean[returns_clean <= threshold]
+            if len(worst_returns) > 0:
+                daily_cvar_5 = worst_returns.mean()
+                cvar_5 = daily_cvar_5 * np.sqrt(252) * 100
+            else:
+                cvar_5 = var_5
+            
             # Annualized return and Sharpe Ratio (risk-free ~ 0)
             total_ret = (1 + returns_clean).prod() - 1
             ann_return = ((1 + total_ret) ** (252 / len(returns_clean))) - 1
