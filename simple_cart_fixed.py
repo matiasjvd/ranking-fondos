@@ -25,7 +25,7 @@ class PortfolioManager:
             st.session_state.portfolio_weights = {}
         if 'show_portfolio_analysis' not in st.session_state:
             st.session_state.show_portfolio_analysis = False
-    
+            
     @staticmethod
     def render_fund_selector(ticker, fund_name, key_suffix=""):
         """Renderizar selector para fondos del portafolio"""
