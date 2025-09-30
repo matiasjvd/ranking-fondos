@@ -583,6 +583,11 @@ def main():
         else:
             fund_options[ticker] = ticker
     
+    # Initialize filter variables
+    selected_asset_class = 'All'
+    selected_geography = 'All'
+    selected_market = 'All'
+    
     # Asset Class filter
     if 'Asset Class' in etf_dict.columns:
         asset_classes = ['All'] + sorted(etf_dict['Asset Class'].dropna().unique().tolist())
@@ -592,45 +597,30 @@ def main():
             filtered_tickers = etf_dict[etf_dict['Asset Class'] == selected_asset_class]['Ticker'].tolist()
             fund_options = {k: v for k, v in fund_options.items() if v in filtered_tickers}
     
-    # Subclass filter
-    if 'Subclass' in etf_dict.columns:
-        # Filter subclasses based on selected asset class
-        if selected_asset_class != 'All':
-            available_subclasses = etf_dict[etf_dict['Asset Class'] == selected_asset_class]['Subclass'].dropna().unique()
-        else:
-            available_subclasses = etf_dict['Subclass'].dropna().unique()
+    # Geography / Subclass filter
+    if 'Geography / Subclass' in etf_dict.columns:
+        # Filter geographies based on selected asset class
+        current_tickers = [v for v in fund_options.values()]
+        available_geographies = etf_dict[etf_dict['Ticker'].isin(current_tickers)]['Geography / Subclass'].dropna().unique()
         
-        subclasses = ['All'] + sorted(available_subclasses.tolist())
-        selected_subclass = st.sidebar.selectbox("📂 Subclass:", subclasses)
+        geographies = ['All'] + sorted(available_geographies.tolist())
+        selected_geography = st.sidebar.selectbox("🌍 Geography / Subclass:", geographies)
         
-        if selected_subclass != 'All':
-            filtered_tickers = etf_dict[etf_dict['Subclass'] == selected_subclass]['Ticker'].tolist()
+        if selected_geography != 'All':
+            filtered_tickers = etf_dict[etf_dict['Geography / Subclass'] == selected_geography]['Ticker'].tolist()
             fund_options = {k: v for k, v in fund_options.items() if v in filtered_tickers}
     
-    # Geografia filter
-    if 'Geografia' in etf_dict.columns:
-        # Filter geografias based on previous selections
+    # Market filter
+    if 'Market' in etf_dict.columns:
+        # Filter markets based on previous selections
         current_tickers = [v for v in fund_options.values()]
-        available_geografias = etf_dict[etf_dict['Ticker'].isin(current_tickers)]['Geografia'].dropna().unique()
+        available_markets = etf_dict[etf_dict['Ticker'].isin(current_tickers)]['Market'].dropna().unique()
         
-        geografias = ['All'] + sorted(available_geografias.tolist())
-        selected_geografia = st.sidebar.selectbox("🌍 Geografía:", geografias)
+        markets = ['All'] + sorted(available_markets.tolist())
+        selected_market = st.sidebar.selectbox("🏭 Market:", markets)
         
-        if selected_geografia != 'All':
-            filtered_tickers = etf_dict[etf_dict['Geografia'] == selected_geografia]['Ticker'].tolist()
-            fund_options = {k: v for k, v in fund_options.items() if v in filtered_tickers}
-    
-    # Sector filter
-    if 'Sector' in etf_dict.columns:
-        # Filter sectors based on previous selections
-        current_tickers = [v for v in fund_options.values()]
-        available_sectors = etf_dict[etf_dict['Ticker'].isin(current_tickers)]['Sector'].dropna().unique()
-        
-        sectors = ['All'] + sorted(available_sectors.tolist())
-        selected_sector = st.sidebar.selectbox("🏭 Sector:", sectors)
-        
-        if selected_sector != 'All':
-            filtered_tickers = etf_dict[etf_dict['Sector'] == selected_sector]['Ticker'].tolist()
+        if selected_market != 'All':
+            filtered_tickers = etf_dict[etf_dict['Market'] == selected_market]['Ticker'].tolist()
             fund_options = {k: v for k, v in fund_options.items() if v in filtered_tickers}
     
     # Search filter
@@ -805,12 +795,10 @@ def main():
                     classification_parts = []
                     if 'Asset Class' in fund_info.columns and pd.notna(fund_info['Asset Class'].iloc[0]):
                         classification_parts.append(f"{fund_info['Asset Class'].iloc[0]}")
-                    if 'Subclass' in fund_info.columns and pd.notna(fund_info['Subclass'].iloc[0]):
-                        classification_parts.append(f"{fund_info['Subclass'].iloc[0]}")
-                    if 'Geografia' in fund_info.columns and pd.notna(fund_info['Geografia'].iloc[0]):
-                        classification_parts.append(f"{fund_info['Geografia'].iloc[0]}")
-                    if 'Sector' in fund_info.columns and pd.notna(fund_info['Sector'].iloc[0]):
-                        classification_parts.append(f"{fund_info['Sector'].iloc[0]}")
+                    if 'Geography / Subclass' in fund_info.columns and pd.notna(fund_info['Geography / Subclass'].iloc[0]):
+                        classification_parts.append(f"{fund_info['Geography / Subclass'].iloc[0]}")
+                    if 'Market' in fund_info.columns and pd.notna(fund_info['Market'].iloc[0]):
+                        classification_parts.append(f"{fund_info['Market'].iloc[0]}")
                     
                     if classification_parts:
                         st.caption(" | ".join(classification_parts))
