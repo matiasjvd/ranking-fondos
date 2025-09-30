@@ -88,13 +88,19 @@ def load_data(_prices_mtime: float = None, _dict_mtime: float = None):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(script_dir, 'data')
         
-        # Load price data
+        # Load price data with low_memory=False to avoid dtype warnings
         funds_path = os.path.join(data_dir, 'funds_prices.csv')
-        funds = pd.read_csv(funds_path)
+        funds = pd.read_csv(funds_path, low_memory=False)
         
         # Load dictionary data
         dict_path = os.path.join(data_dir, 'funds_dictionary.csv')
         etf_dict = pd.read_csv(dict_path)
+        
+        # Debug: print data range to verify it's loading correctly
+        if 'Dates' in funds.columns:
+            funds['Dates'] = pd.to_datetime(funds['Dates'])
+            print(f"DEBUG: Datos cargados - Rango: {funds['Dates'].min()} a {funds['Dates'].max()}")
+            print(f"DEBUG: Total filas: {len(funds)}")
         
         return funds, etf_dict
         
@@ -528,6 +534,13 @@ def main():
     # SIDEBAR FILTERS
     st.sidebar.markdown("## Analysis Filters")
 
+    # Clear cache button
+    if st.sidebar.button("🗑️ Clear Cache"):
+        load_data.clear()
+        calculate_performance_metrics.clear()
+        st.success("Cache cleared. Reloading...")
+        st.rerun()
+
     # Refresh data: rebuild CSVs from Excel in repo and clear cache
     if st.sidebar.button("🔄 Refresh data (rebuild CSVs)"):
         try:
@@ -538,14 +551,21 @@ def main():
             convert_excel_to_csv(dict_xlsx_path=dict_xlsx, new_prices_xlsx=new_prices_xlsx)
             # Clear cached data and rerun
             load_data.clear()
+            calculate_performance_metrics.clear()
             st.success("Data refreshed. Reloading...")
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"Error refreshing data: {e}")
     
     # Prepare data for filters
     funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
     fund_columns = [col for col in funds_data.columns if col != 'Dates']
+    
+    # Debug info - show data range
+    st.sidebar.markdown("### 📊 Data Info")
+    st.sidebar.info(f"**Rango de datos:** {funds_data['Dates'].min().strftime('%Y-%m-%d')} a {funds_data['Dates'].max().strftime('%Y-%m-%d')}")
+    st.sidebar.info(f"**Total filas:** {len(funds_data):,}")
+    st.sidebar.info(f"**Total fondos:** {len(fund_columns):,}")
     
     # Create fund options dictionary for better display
     fund_options = {}
