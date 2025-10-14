@@ -143,6 +143,45 @@ def calculate_performance_metrics(funds_df, fund_ticker):
         
         prices['Returns'] = prices[fund_ticker].pct_change()
         
+        # Clean outliers: detect and remove extreme price jumps (likely data errors)
+        # Use a threshold of 50% daily return as indicator of bad data
+        # This catches decimal point errors and other data quality issues
+        returns_clean = prices['Returns'].copy()
+        outlier_threshold = 0.50  # 50% daily return threshold
+        
+        # Identify outliers
+        outliers_mask = abs(returns_clean) > outlier_threshold
+        
+        if outliers_mask.any():
+            # For rows with outlier returns, interpolate the price from neighbors
+            outlier_indices = prices[outliers_mask].index.tolist()
+            
+            for idx in outlier_indices:
+                if idx > 0 and idx < len(prices) - 1:
+                    # Interpolate price from previous and next valid prices
+                    prev_price = prices[fund_ticker].iloc[idx - 1]
+                    next_idx = idx + 1
+                    # Find next non-outlier
+                    while next_idx < len(prices) and next_idx in outlier_indices:
+                        next_idx += 1
+                    
+                    if next_idx < len(prices):
+                        next_price = prices[fund_ticker].iloc[next_idx]
+                        # Simple average interpolation
+                        prices.loc[idx, fund_ticker] = (prev_price + next_price) / 2
+                    else:
+                        # Use previous price if no next price available
+                        prices.loc[idx, fund_ticker] = prev_price
+                elif idx == 0 and len(prices) > 1:
+                    # First row: use next price
+                    prices.loc[idx, fund_ticker] = prices[fund_ticker].iloc[1]
+                elif idx == len(prices) - 1 and len(prices) > 1:
+                    # Last row: use previous price
+                    prices.loc[idx, fund_ticker] = prices[fund_ticker].iloc[-2]
+            
+            # Recalculate returns after cleaning
+            prices['Returns'] = prices[fund_ticker].pct_change()
+        
         current_date = prices['Dates'].max()
         current_year = current_date.year
         
@@ -586,7 +625,7 @@ def main():
     
     # Prepare data for filters
     funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
-    fund_columns = [col for col in funds_data.columns if col != 'Dates']
+    fund_columns = [col for col in funds_data.columns if col != 'Dates' and not col.startswith('Unnamed')]
     
     # Debug info - show data range
     st.sidebar.markdown("### 📊 Data Info")
