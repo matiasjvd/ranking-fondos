@@ -13,6 +13,9 @@ import cvxpy as cp
 import io
 from datetime import datetime, timedelta
 
+# SHARED METRICS CALCULATOR (Sincronizado en ambos dashboards)
+from metrics_calculator import calculate_individual_fund_metrics, calculate_portfolio_metrics
+
 class PortfolioManager:
     """Clase para manejar la gestión de portafolios"""
     
@@ -108,154 +111,19 @@ class PortfolioManager:
     
     @staticmethod
     def calculate_individual_fund_metrics(funds_data, ticker):
-        """Calcular métricas individuales de un fondo (igual que el dashboard original)"""
-        try:
-            if ticker not in funds_data.columns:
-                return None
-            
-            prices = funds_data[['Dates', ticker]].dropna()
-            if len(prices) < 2:
-                return None
-            
-            prices['Dates'] = pd.to_datetime(prices['Dates'])
-            prices = prices.sort_values('Dates').reset_index(drop=True)
-            prices['Returns'] = prices[ticker].pct_change()
-            
-            current_date = prices['Dates'].max()
-            current_year = current_date.year
-            
-            # YTD Return
-            ytd_start = pd.to_datetime(f'{current_year}-01-01')
-            ytd_data = prices[prices['Dates'] >= ytd_start]
-            ytd_return = ((ytd_data[ticker].iloc[-1] / ytd_data[ticker].iloc[0]) - 1) * 100 if len(ytd_data) > 1 else 0
-            
-            # Monthly Return (last 30 days)
-            month_start = current_date - timedelta(days=30)
-            month_data = prices[prices['Dates'] >= month_start]
-            monthly_return = ((month_data[ticker].iloc[-1] / month_data[ticker].iloc[0]) - 1) * 100 if len(month_data) > 1 else 0
-            
-            # 1 Year Return
-            year_1_start = current_date - timedelta(days=365)
-            year_1_data = prices[prices['Dates'] >= year_1_start]
-            return_1y = ((year_1_data[ticker].iloc[-1] / year_1_data[ticker].iloc[0]) - 1) * 100 if len(year_1_data) > 1 else 0
-            
-            # Annual returns for specific years
-            returns_by_year = {}
-            for year in [2024, 2023, 2022]:
-                year_start = pd.to_datetime(f'{year}-01-01')
-                year_end = pd.to_datetime(f'{year}-12-31')
-                year_data = prices[(prices['Dates'] >= year_start) & (prices['Dates'] <= year_end)]
-                if len(year_data) > 1:
-                    year_return = ((year_data[ticker].iloc[-1] / year_data[ticker].iloc[0]) - 1) * 100
-                    returns_by_year[f'{year} Return (%)'] = year_return
-            
-            # Volatility (annualized)
-            volatility = prices['Returns'].std() * np.sqrt(252) * 100
-            
-            # Max Drawdown
-            cumulative = (1 + prices['Returns'].fillna(0)).cumprod()
-            rolling_max = cumulative.expanding().max()
-            drawdown = (cumulative - rolling_max) / rolling_max
-            max_drawdown = drawdown.min() * 100
-            
-            # VaR and CVaR (5% confidence level, annualized)
-            returns_clean = prices['Returns'].dropna()
-            if len(returns_clean) > 0:
-                var_5 = np.percentile(returns_clean, 5) * np.sqrt(252) * 100
-                cvar_5 = returns_clean[returns_clean <= np.percentile(returns_clean, 5)].mean() * np.sqrt(252) * 100
-            else:
-                var_5 = 0
-                cvar_5 = 0
-            
-            # Sharpe for individual fund (risk-free ~ 0)
-            ann_return = returns_clean.mean() * 252 if len(returns_clean) > 0 else 0
-            vol_ann_clean = returns_clean.std() * np.sqrt(252) if len(returns_clean) > 0 else 0
-            sharpe_ratio = (ann_return / vol_ann_clean) if vol_ann_clean > 0 else 0
-
-            metrics = {
-                'YTD Return (%)': ytd_return,
-                'Monthly Return (%)': monthly_return,
-                'Volatility (%)': volatility,
-                'Max Drawdown (%)': max_drawdown,
-                'VaR 5% (%)': var_5,
-                'CVaR 5% (%)': cvar_5,
-                'Sharpe Ratio': sharpe_ratio
-            }
-            
-            metrics.update(returns_by_year)
-            
-            return metrics
-            
-        except Exception as e:
-            return None
+        """
+        ✅ VERSIÓN SINCRONIZADA - Wrapper que usa metrics_calculator.py
+        Garantiza consistencia entre dashboard principal y análisis de portafolio
+        """
+        return calculate_individual_fund_metrics(funds_data, ticker)
     
     @staticmethod
     def calculate_portfolio_metrics(funds_data, selected_funds, weights, start_date=None, end_date=None, returns_data=None):
-        """Calcular métricas del portafolio combinado - OPTIMIZADO"""
-        try:
-            # OPTIMIZACIÓN: Si ya tenemos los datos de retornos, usarlos directamente
-            if returns_data is not None:
-                returns_df = returns_data
-                # Si se especifican fechas, filtrar los datos de retornos
-                if start_date is not None and end_date is not None:
-                    returns_df = returns_df[(returns_df.index >= start_date) & (returns_df.index <= end_date)]
-            else:
-                # Calcular retornos si no se proporcionan
-                funds_data['Dates'] = pd.to_datetime(funds_data['Dates'])
-                
-                # Filtrar por fechas si se proporcionan
-                if start_date is not None and end_date is not None:
-                    filtered_data = funds_data[(funds_data['Dates'] >= start_date) & (funds_data['Dates'] <= end_date)].copy()
-                else:
-                    filtered_data = funds_data.copy()
-                
-                relevant_columns = ['Dates'] + [fund for fund in selected_funds if fund in filtered_data.columns]
-                filtered_data = filtered_data[relevant_columns].dropna()
-                
-                if filtered_data.empty:
-                    return None
-                
-                returns_df = filtered_data.set_index('Dates').pct_change().dropna()
-            
-            if len(returns_df) < 2:
-                return None
-            
-            # OPTIMIZACIÓN: Cálculo vectorizado de retornos del portafolio
-            weights_array = np.array([weights.get(fund, 0) / 100 for fund in returns_df.columns])
-            portfolio_returns = returns_df.dot(weights_array)
-            
-            # Calculate metrics (ya optimizado)
-            total_return = (1 + portfolio_returns).prod() - 1
-            annualized_return = ((1 + total_return) ** (252 / len(portfolio_returns))) - 1
-            volatility = portfolio_returns.std() * np.sqrt(252)
-            sharpe_ratio = annualized_return / volatility if volatility > 0 else 0
-            
-            # Max Drawdown
-            cumulative = (1 + portfolio_returns).cumprod()
-            rolling_max = cumulative.expanding().max()
-            drawdown = (cumulative - rolling_max) / rolling_max
-            max_drawdown = drawdown.min()
-            
-            # VaR and CVaR
-            var_5 = np.percentile(portfolio_returns, 5) * np.sqrt(252)
-            cvar_5 = portfolio_returns[portfolio_returns <= np.percentile(portfolio_returns, 5)].mean() * np.sqrt(252)
-            
-            return {
-                'total_return': total_return * 100,
-                'annualized_return': annualized_return * 100,
-                'volatility': volatility * 100,
-                'sharpe_ratio': sharpe_ratio,
-                'max_drawdown': max_drawdown * 100,
-                'var_5': var_5 * 100,
-                'cvar_5': cvar_5 * 100,
-                'portfolio_returns': portfolio_returns,
-                'period_days': len(portfolio_returns),
-                'start_date': portfolio_returns.index.min() if len(portfolio_returns) > 0 else None,
-                'end_date': portfolio_returns.index.max() if len(portfolio_returns) > 0 else None
-            }
-            
-        except Exception as e:
-            return None
+        """
+        ✅ VERSIÓN SINCRONIZADA - Wrapper que usa metrics_calculator.py
+        Garantiza consistencia entre dashboard principal y análisis de portafolio
+        """
+        return calculate_portfolio_metrics(funds_data, selected_funds, weights, start_date, end_date, returns_data)
     
     @staticmethod
     def calculate_efficient_frontier(funds_data, selected_funds, start_date=None, end_date=None):
