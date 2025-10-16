@@ -191,12 +191,16 @@ class Portfolio:
             if len(portfolio_values) < 2:
                 return None
             
-            returns = pd.Series(portfolio_values).pct_change().dropna()
+            portfolio_series = pd.Series(portfolio_values)
+            returns = portfolio_series.pct_change()
             total_return = ((portfolio_values[-1] / portfolio_values[0]) - 1) * 100
             volatility = returns.std() * np.sqrt(252) * 100
-            sharpe = (returns.mean() * 252) / (returns.std() * np.sqrt(252)) if returns.std() > 0 else 0
             
-            cumulative = (1 + returns).cumprod()
+            returns_clean = returns.dropna()
+            sharpe = (returns_clean.mean() * 252) / (returns_clean.std() * np.sqrt(252)) if returns_clean.std() > 0 else 0
+            
+            # Max Drawdown (igual que en funds_dashboard.py con fillna(0))
+            cumulative = (1 + returns.fillna(0)).cumprod()
             rolling_max = cumulative.expanding().max()
             drawdown = ((cumulative - rolling_max) / rolling_max).min() * 100
             

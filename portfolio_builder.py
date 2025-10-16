@@ -137,26 +137,32 @@ class PortfolioBuilder:
             
             # Convertir a Series para cálculos
             portfolio_series = pd.Series(portfolio_values, index=dates)
-            returns = portfolio_series.pct_change().dropna()
+            returns = portfolio_series.pct_change()
             
             # Calcular métricas
             total_return = ((portfolio_series.iloc[-1] / portfolio_series.iloc[0]) - 1) * 100
             
-            # Volatilidad anualizada
+            # Volatilidad anualizada (igual que en funds_dashboard.py)
             volatility = returns.std() * np.sqrt(252) * 100
             
             # Sharpe Ratio (asumiendo risk-free rate = 0)
-            sharpe_ratio = (returns.mean() * 252) / (returns.std() * np.sqrt(252)) if returns.std() > 0 else 0
+            returns_clean = returns.dropna()
+            sharpe_ratio = (returns_clean.mean() * 252) / (returns_clean.std() * np.sqrt(252)) if returns_clean.std() > 0 else 0
             
-            # Max Drawdown
-            cumulative = (1 + returns).cumprod()
+            # Max Drawdown (igual que en funds_dashboard.py con fillna(0))
+            cumulative = (1 + returns.fillna(0)).cumprod()
             rolling_max = cumulative.expanding().max()
             drawdown = (cumulative - rolling_max) / rolling_max
             max_drawdown = drawdown.min() * 100
             
-            # VaR y CVaR al 5%
-            var_5 = np.percentile(returns, 5) * np.sqrt(252) * 100
-            cvar_5 = returns[returns <= np.percentile(returns, 5)].mean() * np.sqrt(252) * 100
+            # VaR y CVaR al 5% (solo con valores válidos)
+            returns_clean = returns.dropna()
+            if len(returns_clean) > 0:
+                var_5 = np.percentile(returns_clean, 5) * np.sqrt(252) * 100
+                cvar_5 = returns_clean[returns_clean <= np.percentile(returns_clean, 5)].mean() * np.sqrt(252) * 100
+            else:
+                var_5 = 0
+                cvar_5 = 0
             
             return {
                 'Retorno Total (%)': total_return,
