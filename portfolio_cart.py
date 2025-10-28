@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import numpy as np
 from datetime import datetime, timedelta
-import io
+import io 
 
 class PortfolioCart:
     """Clase para manejar el carrito de portafolios"""
