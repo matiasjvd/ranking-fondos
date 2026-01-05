@@ -70,7 +70,7 @@ ranking-fondos/
 
 ### Análisis de Performance
 - **Métricas Calculadas**: 
-  - Retornos: YTD, MTD, mensual, 1 año, 2024, 2023, 2022
+  - Retornos: YTD, MTD, mensual, 1 año, 2025, 2024, 2023
   - Riesgo: Volatilidad anualizada, máximo drawdown
   - VaR/CVaR: Value at Risk y Conditional VaR al 5%
 
@@ -103,7 +103,7 @@ ranking-fondos/
 - **YTD**: Año corriente hasta la fecha
 - **MTD**: Mes corriente hasta la fecha
 - **1Y**: Retorno de 12 meses
-- **Anuales**: 2024, 2023, 2022
+- **Anuales**: 2025, 2024, 2023
 
 ### Métricas de Riesgo
 - **Volatilidad**: Desviación estándar anualizada

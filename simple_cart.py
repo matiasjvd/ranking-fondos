@@ -213,7 +213,7 @@ class SimpleCart:
             
             # Annual returns for specific years
             returns_by_year = {}
-            for year in [2024, 2023, 2022]:
+            for year in [2025, 2024, 2023]:
                 year_start = pd.to_datetime(f'{year}-01-01')
                 year_end = pd.to_datetime(f'{year}-12-31')
                 year_data = prices[(prices['Dates'] >= year_start) & (prices['Dates'] <= year_end)]
@@ -611,7 +611,7 @@ class SimpleCart:
             
             # Formatear columnas de porcentaje
             percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', '1Y Return (%)', 
-                              '2024 Return (%)', '2023 Return (%)', '2022 Return (%)',
+                              '2025 Return (%)', '2024 Return (%)', '2023 Return (%)',
                               'Max Drawdown (%)', 'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
             
             display_df = df_individual.copy()
