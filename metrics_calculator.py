@@ -154,6 +154,7 @@ def calculate_individual_fund_metrics(funds_data, fund_ticker):
         metrics = {
             'YTD Return (%)': ytd_return,
             'Monthly Return (%)': monthly_return,
+            '1Y Return (%)': return_1y,
             'Volatility (%)': volatility,
             'Max Drawdown (%)': max_drawdown,
             'VaR 5% (%)': var_5,

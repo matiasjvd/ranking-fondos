@@ -78,6 +78,8 @@ from portfolio_cart import PortfolioCart, integrate_portfolio_cart
                     # Crear string con métricas principales
                     metrics_str = f"Score: {row.get('Custom Score', 'N/A')} | "
                     metrics_str += f"YTD: {row.get('YTD Return (%)', 'N/A')} | "
+                    if '2025 Return (%)' in row:
+                        metrics_str += f"2025: {row.get('2025 Return (%)', 'N/A')} | "
                     metrics_str += f"1Y: {row.get('1Y Return (%)', 'N/A')} | "
                     metrics_str += f"Vol: {row.get('Volatility (%)', 'N/A')}"
                     
@@ -203,41 +205,8 @@ def execute_simple_dashboard():
     
     # Función simplificada para calcular métricas
     def calculate_basic_metrics(funds_df, ticker):
-        try:
-            if ticker not in funds_df.columns:
-                return None
-            
-            prices = funds_df[['Dates', ticker]].dropna()
-            if len(prices) < 2:
-                return None
-            
-            prices['Dates'] = pd.to_datetime(prices['Dates'])
-            prices = prices.sort_values('Dates').reset_index(drop=True)
-            prices['Returns'] = prices[ticker].pct_change()
-            
-            current_date = prices['Dates'].max()
-            current_year = current_date.year
-            
-            # YTD Return
-            ytd_start = pd.to_datetime(f'{current_year}-01-01')
-            ytd_data = prices[prices['Dates'] >= ytd_start]
-            ytd_return = ((ytd_data[ticker].iloc[-1] / ytd_data[ticker].iloc[0]) - 1) * 100 if len(ytd_data) > 1 else 0
-            
-            # 1 Year Return
-            year_1_start = current_date - timedelta(days=365)
-            year_1_data = prices[prices['Dates'] >= year_1_start]
-            return_1y = ((year_1_data[ticker].iloc[-1] / year_1_data[ticker].iloc[0]) - 1) * 100 if len(year_1_data) > 1 else 0
-            
-            # Volatility
-            volatility = prices['Returns'].std() * np.sqrt(252) * 100
-            
-            return {
-                'YTD Return (%)': ytd_return,
-                '1Y Return (%)': return_1y,
-                'Volatility (%)': volatility
-            }
-        except:
-            return None
+        from metrics_calculator import calculate_individual_fund_metrics
+        return calculate_individual_fund_metrics(funds_df, ticker)
     
     # Header
     st.markdown("# 📈 Dashboard de Análisis de Fondos + Carrito de Portafolios")
@@ -287,9 +256,13 @@ def execute_simple_dashboard():
                 with col1:
                     st.markdown(f"**{fund_name}** ({ticker})")
                     if metrics:
-                        metrics_str = f"YTD: {metrics['YTD Return (%)']:.2f}% | "
-                        metrics_str += f"1Y: {metrics['1Y Return (%)']:.2f}% | "
-                        metrics_str += f"Vol: {metrics['Volatility (%)']:.2f}%"
+                        metrics_parts = [
+                            f"YTD: {metrics.get('YTD Return (%)', 0):.2f}%",
+                            f"2025: {metrics.get('2025 Return (%)', 0):.2f}%" if '2025 Return (%)' in metrics else None,
+                            f"1Y: {metrics.get('1Y Return (%)', 0):.2f}%",
+                            f"Vol: {metrics.get('Volatility (%)', 0):.2f}%"
+                        ]
+                        metrics_str = " | ".join([p for p in metrics_parts if p is not None])
                         st.caption(metrics_str)
                     else:
                         st.caption("Métricas no disponibles")

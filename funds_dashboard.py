@@ -681,7 +681,7 @@ def main():
     display_df = df_scored.copy()
     
     # Format percentage columns
-    percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', 
+    percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', '1Y Return (%)',
                       '2025 Return (%)', '2024 Return (%)', '2023 Return (%)',
                       'Max Drawdown (%)', 'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
     
@@ -736,6 +736,10 @@ def main():
                     metrics_text.append(f"YTD: {row['YTD Return (%)']}")
                 if '2025 Return (%)' in row:
                     metrics_text.append(f"2025: {row['2025 Return (%)']}")
+                if '2024 Return (%)' in row:
+                    metrics_text.append(f"2024: {row['2024 Return (%)']}")
+                if '1Y Return (%)' in row:
+                    metrics_text.append(f"1Y: {row['1Y Return (%)']}")
                 if 'Volatility (%)' in row:
                     metrics_text.append(f"Vol: {row['Volatility (%)']}")
                 if 'Sharpe Ratio' in row:

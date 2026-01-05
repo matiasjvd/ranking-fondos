@@ -438,6 +438,8 @@ def main():
                     metrics_text.append(f"YTD: {row['YTD Return (%)']}")
                 if '2025 Return (%)' in row:
                     metrics_text.append(f"2025: {row['2025 Return (%)']}")
+                if '2024 Return (%)' in row:
+                    metrics_text.append(f"2024: {row['2024 Return (%)']}")
                 if '1Y Return (%)' in row:
                     metrics_text.append(f"1Y: {row['1Y Return (%)']}")
                 if 'Volatility (%)' in row:

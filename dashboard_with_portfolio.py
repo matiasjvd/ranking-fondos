@@ -14,6 +14,8 @@ import os
 import io
 import sys
 
+from metrics_calculator import calculate_individual_fund_metrics, calculate_portfolio_metrics
+
 # Configuración de página
 st.set_page_config(
     page_title="Dashboard de Fondos + Portafolios",
@@ -50,50 +52,11 @@ def load_data():
 
 @st.cache_data
 def calculate_performance_metrics(funds_df, fund_ticker):
-    """Calculate comprehensive performance metrics for a fund"""
-    try:
-        if fund_ticker not in funds_df.columns:
-            return None
-        
-        prices = funds_df[['Dates', fund_ticker]].dropna()
-        if len(prices) < 2:
-            return None
-        
-        prices['Dates'] = pd.to_datetime(prices['Dates'])
-        prices = prices.sort_values('Dates').reset_index(drop=True)
-        prices['Returns'] = prices[fund_ticker].pct_change()
-        
-        current_date = prices['Dates'].max()
-        current_year = current_date.year
-        
-        # YTD Return
-        ytd_start = pd.to_datetime(f'{current_year}-01-01')
-        ytd_data = prices[prices['Dates'] >= ytd_start]
-        ytd_return = ((ytd_data[fund_ticker].iloc[-1] / ytd_data[fund_ticker].iloc[0]) - 1) * 100 if len(ytd_data) > 1 else 0
-        
-        # 1 Year Return
-        year_1_start = current_date - timedelta(days=365)
-        year_1_data = prices[prices['Dates'] >= year_1_start]
-        return_1y = ((year_1_data[fund_ticker].iloc[-1] / year_1_data[fund_ticker].iloc[0]) - 1) * 100 if len(year_1_data) > 1 else 0
-        
-        # Volatility
-        volatility = prices['Returns'].std() * np.sqrt(252) * 100
-        
-        # Max Drawdown
-        cumulative = (1 + prices['Returns'].fillna(0)).cumprod()
-        rolling_max = cumulative.expanding().max()
-        drawdown = (cumulative - rolling_max) / rolling_max
-        max_drawdown = drawdown.min() * 100
-        
-        return {
-            'YTD Return (%)': ytd_return,
-            '1Y Return (%)': return_1y,
-            'Volatility (%)': volatility,
-            'Max Drawdown (%)': max_drawdown
-        }
-        
-    except Exception as e:
-        return None
+    """
+    ✅ VERSIÓN SINCRONIZADA - Wrapper que usa metrics_calculator.py
+    Garantiza consistencia entre dashboard principal y análisis de portafolio
+    """
+    return calculate_individual_fund_metrics(funds_df, fund_ticker)
 
 # Estilos CSS
 st.markdown("""
@@ -172,45 +135,42 @@ class Portfolio:
             return None
         
         try:
-            funds_df['Dates'] = pd.to_datetime(funds_df['Dates'])
-            data = funds_df[(funds_df['Dates'] >= start_date) & (funds_df['Dates'] <= end_date)].copy()
+            # Obtener tickers y pesos
+            selected_funds = list(st.session_state.portfolio.keys())
+            weights = st.session_state.portfolio_weights
             
-            portfolio_values = []
-            for _, row in data.iterrows():
-                value = 0
-                total_weight = 0
-                for ticker in st.session_state.portfolio:
-                    if ticker in data.columns and pd.notna(row[ticker]):
-                        weight = st.session_state.portfolio_weights.get(ticker, 0) / 100
-                        value += row[ticker] * weight
-                        total_weight += weight
-                
-                if total_weight > 0:
-                    portfolio_values.append(value / total_weight)
+            # Usar el calculador centralizado
+            results = calculate_portfolio_metrics(
+                funds_df, 
+                selected_funds, 
+                weights, 
+                start_date=pd.to_datetime(start_date), 
+                end_date=pd.to_datetime(end_date)
+            )
             
-            if len(portfolio_values) < 2:
+            if results is None:
                 return None
             
-            portfolio_series = pd.Series(portfolio_values)
-            returns = portfolio_series.pct_change()
-            total_return = ((portfolio_values[-1] / portfolio_values[0]) - 1) * 100
-            volatility = returns.std() * np.sqrt(252) * 100
+            # Preparar datos para el gráfico
+            portfolio_returns = results['portfolio_returns']
+            cumulative_returns = (1 + portfolio_returns).cumprod() * 100
             
-            returns_clean = returns.dropna()
-            sharpe = (returns_clean.mean() * 252) / (returns_clean.std() * np.sqrt(252)) if returns_clean.std() > 0 else 0
-            
-            # Max Drawdown (igual que en funds_dashboard.py con fillna(0))
-            cumulative = (1 + returns.fillna(0)).cumprod()
-            rolling_max = cumulative.expanding().max()
-            drawdown = ((cumulative - rolling_max) / rolling_max).min() * 100
-            
-            return {
-                'Retorno Total (%)': total_return,
-                'Volatilidad (%)': volatility,
-                'Sharpe Ratio': sharpe,
-                'Max Drawdown (%)': drawdown,
-                'chart_data': (data['Dates'].tolist(), [(v/portfolio_values[0])*100 for v in portfolio_values])
+            metrics = {
+                'Retorno Total (%)': results['total_return'],
+                'Retorno Anualizado (%)': results['annualized_return'],
+                'Volatilidad (%)': results['volatility'],
+                'Sharpe Ratio': results['sharpe_ratio'],
+                'Max Drawdown (%)': results['max_drawdown'],
+                'chart_data': (portfolio_returns.index.tolist(), cumulative_returns.tolist())
             }
+            
+            # Agregar retornos anuales
+            for year in [2025, 2024, 2023]:
+                key = f'{year} Return (%)'
+                if key in results:
+                    metrics[key] = results[key]
+            
+            return metrics
         except:
             return None
     
@@ -394,6 +354,19 @@ def render_portfolio_manager(funds_data, etf_dict):
                     with col4:
                         st.metric("Max Drawdown", f"{metrics['Max Drawdown (%)']:.2f}%")
                     
+                    # Mostrar retornos anuales
+                    st.markdown("### 📅 Retornos Anuales")
+                    ann_col1, ann_col2, ann_col3 = st.columns(3)
+                    with ann_col1:
+                        if '2025 Return (%)' in metrics:
+                            st.metric("2025 Return", f"{metrics['2025 Return (%)']:.2f}%")
+                    with ann_col2:
+                        if '2024 Return (%)' in metrics:
+                            st.metric("2024 Return", f"{metrics['2024 Return (%)']:.2f}%")
+                    with ann_col3:
+                        if '2023 Return (%)' in metrics:
+                            st.metric("2023 Return", f"{metrics['2023 Return (%)']:.2f}%")
+                    
                     # Gráfico
                     dates, values = metrics['chart_data']
                     fig = go.Figure()
@@ -478,10 +451,12 @@ def main():
                 fund_data.append({
                     'Ticker': ticker,
                     'Nombre': fund_name,
-                    'YTD (%)': metrics['YTD Return (%)'],
-                    '1Y (%)': metrics['1Y Return (%)'],
-                    'Vol (%)': metrics['Volatility (%)'],
-                    'DD (%)': metrics['Max Drawdown (%)']
+                    'YTD (%)': metrics.get('YTD Return (%)', 0),
+                    '2025 (%)': metrics.get('2025 Return (%)', 0),
+                    '2024 (%)': metrics.get('2024 Return (%)', 0),
+                    '1Y (%)': metrics.get('1Y Return (%)', 0),
+                    'Vol (%)': metrics.get('Volatility (%)', 0),
+                    'DD (%)': metrics.get('Max Drawdown (%)', 0)
                 })
         
         if not fund_data:
@@ -489,7 +464,7 @@ def main():
             return
         
         df = pd.DataFrame(fund_data)
-        df = df.sort_values('1Y (%)', ascending=False)
+        df = df.sort_values('YTD (%)', ascending=False)
     
     # Mostrar fondos con botones
     for _, row in df.iterrows():
@@ -498,10 +473,20 @@ def main():
             
             with col1:
                 # Información del fondo
+                metrics_parts = [
+                    f"YTD: {row['YTD (%)']:.2f}%",
+                    f"2025: {row['2025 (%)']:.2f}%" if row['2025 (%)'] != 0 else None,
+                    f"2024: {row['2024 (%)']:.2f}%" if row['2024 (%)'] != 0 else None,
+                    f"1Y: {row['1Y (%)']:.2f}%",
+                    f"Vol: {row['Vol (%)']:.2f}%",
+                    f"DD: {row['DD (%)']:.2f}%"
+                ]
+                metrics_str = " | ".join([p for p in metrics_parts if p is not None])
+                
                 st.markdown(f"""
                 <div class="fund-row">
                     <strong>{row['Nombre']}</strong> ({row['Ticker']})<br>
-                    <small>YTD: {row['YTD (%)']:.2f}% | 1Y: {row['1Y (%)']:.2f}% | Vol: {row['Vol (%)']:.2f}% | DD: {row['DD (%)']:.2f}%</small>
+                    <small>{metrics_str}</small>
                 </div>
                 """, unsafe_allow_html=True)
             
