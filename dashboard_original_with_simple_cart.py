@@ -15,6 +15,7 @@ import os
 import cvxpy as cp
 import base64
 import io
+from metrics_calculator import calculate_individual_fund_metrics
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -117,81 +118,8 @@ def load_data():
 
 @st.cache_data
 def calculate_performance_metrics(funds_df, fund_ticker):
-    """Calculate comprehensive performance metrics for a fund (IGUAL QUE EL ORIGINAL)"""
-    try:
-        if fund_ticker not in funds_df.columns:
-            return None
-        
-        prices = funds_df[['Dates', fund_ticker]].dropna()
-        if len(prices) < 2:
-            return None
-        
-        prices['Dates'] = pd.to_datetime(prices['Dates'])
-        prices = prices.sort_values('Dates').reset_index(drop=True)
-        prices['Returns'] = prices[fund_ticker].pct_change()
-        
-        current_date = prices['Dates'].max()
-        current_year = current_date.year
-        
-        # YTD Return
-        ytd_start = pd.to_datetime(f'{current_year}-01-01')
-        ytd_data = prices[prices['Dates'] >= ytd_start]
-        ytd_return = ((ytd_data[fund_ticker].iloc[-1] / ytd_data[fund_ticker].iloc[0]) - 1) * 100 if len(ytd_data) > 1 else 0
-        
-        # Monthly Return (last 30 days)
-        month_start = current_date - timedelta(days=30)
-        month_data = prices[prices['Dates'] >= month_start]
-        monthly_return = ((month_data[fund_ticker].iloc[-1] / month_data[fund_ticker].iloc[0]) - 1) * 100 if len(month_data) > 1 else 0
-        
-        # 1 Year Return
-        year_1_start = current_date - timedelta(days=365)
-        year_1_data = prices[prices['Dates'] >= year_1_start]
-        return_1y = ((year_1_data[fund_ticker].iloc[-1] / year_1_data[fund_ticker].iloc[0]) - 1) * 100 if len(year_1_data) > 1 else 0
-        
-        # Annual returns for specific years
-        returns_by_year = {}
-        for year in [2025, 2024, 2023]:
-            year_start = pd.to_datetime(f'{year}-01-01')
-            year_end = pd.to_datetime(f'{year}-12-31')
-            year_data = prices[(prices['Dates'] >= year_start) & (prices['Dates'] <= year_end)]
-            if len(year_data) > 1:
-                year_return = ((year_data[fund_ticker].iloc[-1] / year_data[fund_ticker].iloc[0]) - 1) * 100
-                returns_by_year[f'{year} Return (%)'] = year_return
-        
-        # Volatility (annualized)
-        volatility = prices['Returns'].std() * np.sqrt(252) * 100
-        
-        # Max Drawdown
-        cumulative = (1 + prices['Returns'].fillna(0)).cumprod()
-        rolling_max = cumulative.expanding().max()
-        drawdown = (cumulative - rolling_max) / rolling_max
-        max_drawdown = drawdown.min() * 100
-        
-        # VaR and CVaR (5% confidence level, annualized)
-        returns_clean = prices['Returns'].dropna()
-        if len(returns_clean) > 0:
-            var_5 = np.percentile(returns_clean, 5) * np.sqrt(252) * 100
-            cvar_5 = returns_clean[returns_clean <= np.percentile(returns_clean, 5)].mean() * np.sqrt(252) * 100
-        else:
-            var_5 = 0
-            cvar_5 = 0
-        
-        metrics = {
-            'YTD Return (%)': ytd_return,
-            'Monthly Return (%)': monthly_return,
-            '1Y Return (%)': return_1y,
-            'Volatility (%)': volatility,
-            'Max Drawdown (%)': max_drawdown,
-            'VaR 5% (%)': var_5,
-            'CVaR 5% (%)': cvar_5
-        }
-        
-        metrics.update(returns_by_year)
-        
-        return metrics
-        
-    except Exception as e:
-        return None
+    """Calculate comprehensive performance metrics for a fund using the centralized calculator"""
+    return calculate_individual_fund_metrics(funds_df, fund_ticker)
 
 def calculate_custom_score(df, weights):
     """Calculate custom score based on user-defined weights (IGUAL QUE EL ORIGINAL)"""
@@ -770,6 +698,8 @@ def main():
                 metrics_text = []
                 if 'YTD Return (%)' in row:
                     metrics_text.append(f"YTD: {row['YTD Return (%)']}")
+                if '2025 Return (%)' in row:
+                    metrics_text.append(f"2025: {row['2025 Return (%)']}")
                 if '1Y Return (%)' in row:
                     metrics_text.append(f"1Y: {row['1Y Return (%)']}")
                 if 'Volatility (%)' in row:

@@ -231,6 +231,20 @@ def calculate_portfolio_metrics(funds_data, selected_funds, weights, start_date=
         # Calculate metrics
         total_return = (1 + portfolio_returns).prod() - 1
         
+        # Annual returns for specific years
+        returns_by_year = {}
+        # Convert index to datetime if it's not already
+        portfolio_returns.index = pd.to_datetime(portfolio_returns.index)
+        
+        for year in [2025, 2024, 2023]:
+            year_start = pd.to_datetime(f'{year}-01-01')
+            year_end = pd.to_datetime(f'{year}-12-31')
+            year_data = portfolio_returns[(portfolio_returns.index >= year_start) & (portfolio_returns.index <= year_end)]
+            if len(year_data) > 1:
+                # Cumulative return for the year
+                year_ret = (1 + year_data).prod() - 1
+                returns_by_year[f'{year} Return (%)'] = year_ret * 100
+        
         # Annualized return usando la misma fórmula que en calculate_individual_fund_metrics
         annualized_return = ((1 + total_return) ** (252 / len(portfolio_returns))) - 1
         volatility = portfolio_returns.std() * np.sqrt(252)
@@ -246,7 +260,7 @@ def calculate_portfolio_metrics(funds_data, selected_funds, weights, start_date=
         var_5 = np.percentile(portfolio_returns, 5) * np.sqrt(252)
         cvar_5 = portfolio_returns[portfolio_returns <= np.percentile(portfolio_returns, 5)].mean() * np.sqrt(252)
         
-        return {
+        results = {
             'total_return': total_return * 100,
             'annualized_return': annualized_return * 100,
             'volatility': volatility * 100,
@@ -259,6 +273,9 @@ def calculate_portfolio_metrics(funds_data, selected_funds, weights, start_date=
             'start_date': portfolio_returns.index.min() if len(portfolio_returns) > 0 else None,
             'end_date': portfolio_returns.index.max() if len(portfolio_returns) > 0 else None
         }
+        
+        results.update(returns_by_year)
+        return results
         
     except Exception as e:
         return None

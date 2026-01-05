@@ -11,6 +11,7 @@ import plotly.express as px
 import numpy as np
 from datetime import datetime, timedelta
 import io 
+from metrics_calculator import calculate_individual_fund_metrics, calculate_portfolio_metrics
 
 class PortfolioCart:
     """Clase para manejar el carrito de portafolios"""
@@ -165,81 +166,60 @@ class PortfolioCart:
     
     @staticmethod
     def calculate_portfolio_performance(funds_df, start_date, end_date):
-        """Calcular performance del portafolio"""
+        """Calcular performance del portafolio usando el calculador centralizado"""
         PortfolioCart.initialize()
         
         if not st.session_state.portfolio_cart:
             return None
         
         try:
-            # Filtrar datos por fechas
-            funds_df['Dates'] = pd.to_datetime(funds_df['Dates'])
-            filtered_data = funds_df[
-                (funds_df['Dates'] >= start_date) & 
-                (funds_df['Dates'] <= end_date)
-            ].copy()
+            # Obtener tickers y pesos
+            selected_funds = list(st.session_state.portfolio_cart.keys())
+            weights = st.session_state.portfolio_weights
             
-            if filtered_data.empty:
+            # Usar el calculador centralizado
+            results = calculate_portfolio_metrics(
+                funds_df, 
+                selected_funds, 
+                weights, 
+                start_date=pd.to_datetime(start_date), 
+                end_date=pd.to_datetime(end_date)
+            )
+            
+            if results is None:
                 return None
             
-            # Calcular valor del portafolio día a día
-            portfolio_values = []
-            dates = []
+            # Preparar datos para el gráfico
+            portfolio_returns = results['portfolio_returns']
+            cumulative_returns = (1 + portfolio_returns).cumprod() * 100
             
-            for _, row in filtered_data.iterrows():
-                portfolio_value = 0
-                total_weight = 0
-                
-                for ticker in st.session_state.portfolio_cart.keys():
-                    if ticker in filtered_data.columns and pd.notna(row[ticker]):
-                        weight = st.session_state.portfolio_weights.get(ticker, 0) / 100
-                        portfolio_value += row[ticker] * weight
-                        total_weight += weight
-                
-                if total_weight > 0:
-                    portfolio_values.append(portfolio_value / total_weight)
-                    dates.append(row['Dates'])
+            # Insertar base 100 al principio si es posible
+            dates = [results['start_date'] - timedelta(days=1)] + portfolio_returns.index.tolist()
+            values = [100.0] + cumulative_returns.tolist()
             
-            if len(portfolio_values) < 2:
-                return None
-            
-            # Calcular retornos
-            portfolio_series = pd.Series(portfolio_values, index=dates)
-            returns = portfolio_series.pct_change().dropna()
-            
-            # Métricas
-            total_return = ((portfolio_series.iloc[-1] / portfolio_series.iloc[0]) - 1) * 100
-            volatility = returns.std() * np.sqrt(252) * 100
-            sharpe_ratio = (returns.mean() * 252) / (returns.std() * np.sqrt(252)) if returns.std() > 0 else 0
-            
-            # Max Drawdown
-            cumulative = (1 + returns).cumprod()
-            rolling_max = cumulative.expanding().max()
-            drawdown = (cumulative - rolling_max) / rolling_max
-            max_drawdown = drawdown.min() * 100
-            
-            # VaR y CVaR
-            var_5 = np.percentile(returns, 5) * np.sqrt(252) * 100
-            cvar_5 = returns[returns <= np.percentile(returns, 5)].mean() * np.sqrt(252) * 100
-            
-            # Normalizar para gráfico (base 100)
-            base_value = portfolio_values[0]
-            normalized_values = [(v / base_value) * 100 for v in portfolio_values]
-            
-            return {
+            return_dict = {
                 'metrics': {
-                    'Retorno Total (%)': total_return,
-                    'Volatilidad Anualizada (%)': volatility,
-                    'Sharpe Ratio': sharpe_ratio,
-                    'Max Drawdown (%)': max_drawdown,
-                    'VaR 5% (%)': var_5,
-                    'CVaR 5% (%)': cvar_5
+                    'Retorno Total (%)': results['total_return'],
+                    'Retorno Anualizado (%)': results['annualized_return'],
+                    'Volatilidad Anualizada (%)': results['volatility'],
+                    'Sharpe Ratio': results['sharpe_ratio'],
+                    'Max Drawdown (%)': results['max_drawdown'],
+                    'VaR 5% (%)': results['var_5'],
+                    'CVaR 5% (%)': results['cvar_5']
                 },
                 'chart_data': {
                     'dates': dates,
-                    'values': normalized_values
+                    'values': values
                 }
             }
+            
+            # Agregar retornos anuales si están disponibles
+            for year in [2025, 2024, 2023]:
+                key = f'{year} Return (%)'
+                if key in results:
+                    return_dict['metrics'][key] = results[key]
+            
+            return return_dict
             
         except Exception as e:
             st.error(f"Error calculando performance: {e}")
@@ -540,26 +520,63 @@ class PortfolioCart:
         
         if analyze_button:
             # Necesitamos cargar los datos de fondos para el análisis
-            # Esto requiere acceso a la función load_data del dashboard original
-            st.info("💡 Para el análisis de performance, necesitamos cargar los datos de fondos...")
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            data_dir = os.path.join(script_dir, 'data')
+            funds_path = os.path.join(data_dir, 'funds_prices.csv')
             
-            # Placeholder para mostrar que la funcionalidad está disponible
-            st.markdown("### 📊 Métricas Calculadas")
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Retorno Total", "Calculando...", help="Retorno total del período")
-                st.metric("Volatilidad", "Calculando...", help="Volatilidad anualizada")
-            
-            with col2:
-                st.metric("Sharpe Ratio", "Calculando...", help="Retorno ajustado por riesgo")
-                st.metric("Max Drawdown", "Calculando...", help="Máxima pérdida desde un pico")
-            
-            with col3:
-                st.metric("VaR 5%", "Calculando...", help="Value at Risk al 5%")
-                st.metric("CVaR 5%", "Calculando...", help="Conditional VaR al 5%")
-            
-            st.info("🔧 Funcionalidad de análisis completa disponible cuando se integre con los datos del dashboard principal.")
+            try:
+                funds_data = pd.read_csv(funds_path)
+                
+                # Calcular métricas
+                results = PortfolioCart.calculate_portfolio_performance(
+                    funds_data, 
+                    pd.to_datetime(start_date), 
+                    pd.to_datetime(end_date)
+                )
+                
+                if results:
+                    metrics = results['metrics']
+                    
+                    st.markdown("### 📊 Métricas Calculadas")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Retorno Total", f"{metrics.get('Retorno Total (%)', 0):.2f}%")
+                        st.metric("Volatilidad", f"{metrics.get('Volatilidad Anualizada (%)', 0):.2f}%")
+                    
+                    with col2:
+                        st.metric("Sharpe Ratio", f"{metrics.get('Sharpe Ratio', 0):.2f}")
+                        st.metric("Max Drawdown", f"{metrics.get('Max Drawdown (%)', 0):.2f}%")
+                    
+                    with col3:
+                        st.metric("VaR 5%", f"{metrics.get('VaR 5% (%)', 0):.2f}%")
+                        st.metric("CVaR 5%", f"{metrics.get('CVaR 5% (%)', 0):.2f}%")
+                    
+                    # Mostrar retornos anuales
+                    st.markdown("### 📅 Retornos Anuales")
+                    ann_col1, ann_col2, ann_col3 = st.columns(3)
+                    
+                    # Recalcular métricas para los años específicos para obtener los retornos anuales
+                    # (o podríamos modificar calculate_portfolio_performance para que los devuelva)
+                    # Por ahora los calculamos aquí o los extraemos si están en metrics
+                    
+                    with ann_col1:
+                        if '2025 Return (%)' in metrics:
+                            st.metric("2025 Return", f"{metrics['2025 Return (%)']:.2f}%")
+                    with ann_col2:
+                        if '2024 Return (%)' in metrics:
+                            st.metric("2024 Return", f"{metrics['2024 Return (%)']:.2f}%")
+                    with ann_col3:
+                        if '2023 Return (%)' in metrics:
+                            st.metric("2023 Return", f"{metrics['2023 Return (%)']:.2f}%")
+                    
+                    # Gráfico de performance
+                    fig = PortfolioCart.create_portfolio_chart(results['chart_data'])
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.error("No se pudieron calcular las métricas para el período seleccionado.")
+            except Exception as e:
+                st.error(f"Error cargando datos para análisis: {e}")
         
         # Exportación
         st.markdown("## 💾 Exportar Portafolio")

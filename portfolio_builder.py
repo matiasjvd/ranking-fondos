@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import io
 import base64
 from typing import Dict, List, Tuple, Optional
+from metrics_calculator import calculate_individual_fund_metrics, calculate_portfolio_metrics
 
 class PortfolioBuilder:
     """Clase para manejar la construcción y análisis de portafolios"""
@@ -94,86 +95,47 @@ class PortfolioBuilder:
                 )
     
     def calculate_portfolio_metrics(self, funds_df: pd.DataFrame, start_date: datetime, end_date: datetime) -> Dict:
-        """Calcular métricas del portafolio"""
+        """Calcular métricas del portafolio usando el calculador centralizado"""
         if not st.session_state.portfolio_assets:
             return {}
         
         try:
-            # Filtrar datos por fechas
-            funds_df['Dates'] = pd.to_datetime(funds_df['Dates'])
-            filtered_data = funds_df[(funds_df['Dates'] >= start_date) & (funds_df['Dates'] <= end_date)].copy()
+            # Obtener tickers y pesos
+            selected_funds = list(st.session_state.portfolio_assets.keys())
+            weights = st.session_state.portfolio_weights
             
-            if filtered_data.empty:
+            # Usar el calculador centralizado
+            results = calculate_portfolio_metrics(
+                funds_df, 
+                selected_funds, 
+                weights, 
+                start_date=pd.to_datetime(start_date), 
+                end_date=pd.to_datetime(end_date)
+            )
+            
+            if results is None:
                 return {}
             
-            # Obtener tickers del portafolio
-            portfolio_tickers = list(st.session_state.portfolio_assets.keys())
-            available_tickers = [t for t in portfolio_tickers if t in filtered_data.columns]
-            
-            if not available_tickers:
-                return {}
-            
-            # Calcular retornos de cada activo
-            returns_data = {}
-            portfolio_values = []
-            dates = []
-            
-            for _, row in filtered_data.iterrows():
-                portfolio_value = 0
-                total_weight = 0
-                
-                for ticker in available_tickers:
-                    if pd.notna(row[ticker]):
-                        weight = st.session_state.portfolio_weights.get(ticker, 0) / 100
-                        portfolio_value += row[ticker] * weight
-                        total_weight += weight
-                
-                if total_weight > 0:
-                    portfolio_values.append(portfolio_value / total_weight)
-                    dates.append(row['Dates'])
-            
-            if len(portfolio_values) < 2:
-                return {}
-            
-            # Convertir a Series para cálculos
-            portfolio_series = pd.Series(portfolio_values, index=dates)
-            returns = portfolio_series.pct_change()
-            
-            # Calcular métricas
-            total_return = ((portfolio_series.iloc[-1] / portfolio_series.iloc[0]) - 1) * 100
-            
-            # Volatilidad anualizada (igual que en funds_dashboard.py)
-            volatility = returns.std() * np.sqrt(252) * 100
-            
-            # Sharpe Ratio (asumiendo risk-free rate = 0)
-            returns_clean = returns.dropna()
-            sharpe_ratio = (returns_clean.mean() * 252) / (returns_clean.std() * np.sqrt(252)) if returns_clean.std() > 0 else 0
-            
-            # Max Drawdown (igual que en funds_dashboard.py con fillna(0))
-            cumulative = (1 + returns.fillna(0)).cumprod()
-            rolling_max = cumulative.expanding().max()
-            drawdown = (cumulative - rolling_max) / rolling_max
-            max_drawdown = drawdown.min() * 100
-            
-            # VaR y CVaR al 5% (solo con valores válidos)
-            returns_clean = returns.dropna()
-            if len(returns_clean) > 0:
-                var_5 = np.percentile(returns_clean, 5) * np.sqrt(252) * 100
-                cvar_5 = returns_clean[returns_clean <= np.percentile(returns_clean, 5)].mean() * np.sqrt(252) * 100
-            else:
-                var_5 = 0
-                cvar_5 = 0
-            
-            return {
-                'Retorno Total (%)': total_return,
-                'Volatilidad Anualizada (%)': volatility,
-                'Sharpe Ratio': sharpe_ratio,
-                'Max Drawdown (%)': max_drawdown,
-                'VaR 5% Anualizado (%)': var_5,
-                'CVaR 5% Anualizado (%)': cvar_5,
-                'Número de Activos': len(available_tickers),
-                'Período': f"{start_date.strftime('%Y-%m-%d')} a {end_date.strftime('%Y-%m-%d')}"
+            # Formatear resultados para el dashboard
+            metrics = {
+                'Retorno Total (%)': results['total_return'],
+                'Retorno Anualizado (%)': results['annualized_return'],
+                'Volatilidad Anualizada (%)': results['volatility'],
+                'Sharpe Ratio': results['sharpe_ratio'],
+                'Max Drawdown (%)': results['max_drawdown'],
+                'VaR 5% (%)': results['var_5'],
+                'CVaR 5% (%)': results['cvar_5'],
+                'Número de Activos': len(selected_funds),
+                'Período': f"{results['start_date'].strftime('%Y-%m-%d')} a {results['end_date'].strftime('%Y-%m-%d')}"
             }
+            
+            # Agregar retornos anuales si están disponibles
+            for year in [2025, 2024, 2023]:
+                key = f'{year} Return (%)'
+                if key in results:
+                    metrics[key] = results[key]
+            
+            return metrics
             
         except Exception as e:
             st.error(f"Error calculando métricas del portafolio: {e}")
@@ -550,8 +512,22 @@ def render_portfolio_management_tab(funds_data: pd.DataFrame, etf_dict: pd.DataF
                     st.metric("Max Drawdown", f"{metrics.get('Max Drawdown (%)', 0):.2f}%")
                 
                 with col3:
-                    st.metric("VaR 5%", f"{metrics.get('VaR 5% Anualizado (%)', 0):.2f}%")
-                    st.metric("CVaR 5%", f"{metrics.get('CVaR 5% Anualizado (%)', 0):.2f}%")
+                    st.metric("VaR 5%", f"{metrics.get('VaR 5% (%)', 0):.2f}%")
+                    st.metric("CVaR 5%", f"{metrics.get('CVaR 5% (%)', 0):.2f}%")
+                
+                # Mostrar retornos anuales en una nueva fila
+                st.markdown("### 📅 Retornos Anuales del Portafolio")
+                ann_col1, ann_col2, ann_col3 = st.columns(3)
+                
+                with ann_col1:
+                    if '2025 Return (%)' in metrics:
+                        st.metric("2025 Return", f"{metrics['2025 Return (%)']:.2f}%")
+                with ann_col2:
+                    if '2024 Return (%)' in metrics:
+                        st.metric("2024 Return", f"{metrics['2024 Return (%)']:.2f}%")
+                with ann_col3:
+                    if '2023 Return (%)' in metrics:
+                        st.metric("2023 Return", f"{metrics['2023 Return (%)']:.2f}%")
                 
                 # Gráfico de performance
                 performance_chart = portfolio_builder.create_portfolio_performance_chart(

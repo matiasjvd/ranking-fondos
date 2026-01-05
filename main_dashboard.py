@@ -303,7 +303,9 @@ def render_funds_analysis_tab(funds_data, etf_dict):
         
         with col1:
             # Crear una fila de métricas
-            metrics_text = " | ".join([f"{col}: {row[col]}" for col in final_cols[2:6] if col in row])
+            display_metrics = ['YTD Return (%)', '2025 Return (%)', '2024 Return (%)', '1Y Return (%)']
+            metrics_list = [f"{col.split(' ')[0]}: {row[col]}" for col in display_metrics if col in row]
+            metrics_text = " | ".join(metrics_list)
             st.markdown(f"**{row['Fund Name']} ({row['Ticker']})** - Score: {row['Custom Score']}")
             st.caption(metrics_text)
         

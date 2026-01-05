@@ -574,6 +574,19 @@ class PortfolioManager:
                 with col7:
                     st.metric("CVaR 5%", f"{portfolio_metrics['cvar_5']:.2f}%")
                 
+                # Mostrar retornos anuales del portafolio
+                st.markdown("### 📅 Retornos Anuales del Portafolio")
+                ann_col1, ann_col2, ann_col3 = st.columns(3)
+                with ann_col1:
+                    if '2025 Return (%)' in portfolio_metrics:
+                        st.metric("2025 Return", f"{portfolio_metrics['2025 Return (%)']:.2f}%")
+                with ann_col2:
+                    if '2024 Return (%)' in portfolio_metrics:
+                        st.metric("2024 Return", f"{portfolio_metrics['2024 Return (%)']:.2f}%")
+                with ann_col3:
+                    if '2023 Return (%)' in portfolio_metrics:
+                        st.metric("2023 Return", f"{portfolio_metrics['2023 Return (%)']:.2f}%")
+                
                 # Performance chart
                 st.markdown("### 📊 Evolución del Portafolio")
                 
