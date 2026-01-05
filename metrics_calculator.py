@@ -107,7 +107,7 @@ def calculate_individual_fund_metrics(funds_data, fund_ticker):
         
         # Annual returns for specific years
         returns_by_year = {}
-        for year in [2024, 2023, 2022]:
+        for year in [2025, 2024, 2023]:
             year_start = pd.to_datetime(f'{year}-01-01')
             year_end = pd.to_datetime(f'{year}-12-31')
             year_data = prices[(prices['Dates'] >= year_start) & (prices['Dates'] <= year_end)]

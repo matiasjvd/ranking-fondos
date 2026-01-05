@@ -460,10 +460,10 @@ class PortfolioManager:
             df_individual = pd.DataFrame(individual_metrics)
             
             # Format percentage columns + Sharpe
-            percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', 
-                              '2024 Return (%)', '2023 Return (%)', '2022 Return (%)',
+            percentage_cols = ['YTD Return (%)', 'Monthly Return (%)',
+                               '2025 Return (%)', '2024 Return (%)', '2023 Return (%)',
                               'Max Drawdown (%)', 'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
-            
+
             display_df = df_individual.copy()
             for col in percentage_cols:
                 if col in display_df.columns:
