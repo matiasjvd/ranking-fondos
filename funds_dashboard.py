@@ -565,9 +565,9 @@ def main():
     
     weights = {}
     weights['YTD Return (%)'] = st.sidebar.slider("YTD Return", 0, 100, 25)
+    weights['2025 Return (%)'] = st.sidebar.slider("2025 Return", 0, 100, 15)
     weights['2024 Return (%)'] = st.sidebar.slider("2024 Return", 0, 100, 15)
     weights['2023 Return (%)'] = st.sidebar.slider("2023 Return", 0, 100, 10)
-    weights['2022 Return (%)'] = st.sidebar.slider("2022 Return", 0, 100, 5)
     weights['Max Drawdown (%)'] = st.sidebar.slider("Max Drawdown", 0, 100, 15)
     weights['Volatility (%)'] = st.sidebar.slider("Volatility", 0, 100, 10)
     weights['VaR 5% (%)'] = st.sidebar.slider("VaR 5%", 0, 100, 10)
@@ -682,7 +682,7 @@ def main():
     
     # Format percentage columns
     percentage_cols = ['YTD Return (%)', 'Monthly Return (%)', 
-                      '2024 Return (%)', '2023 Return (%)', '2022 Return (%)',
+                      '2025 Return (%)', '2024 Return (%)', '2023 Return (%)',
                       'Max Drawdown (%)', 'Volatility (%)', 'VaR 5% (%)', 'CVaR 5% (%)']
     
     for col in percentage_cols:
