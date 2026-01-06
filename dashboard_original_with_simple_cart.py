@@ -24,6 +24,7 @@ from reportlab.lib import colors
 import warnings
 warnings.filterwarnings('ignore')
 
+#Ajuste
 # SIMPLE CART INTEGRATION
 from simple_cart_fixed import PortfolioManager, integrate_portfolio_manager
 
