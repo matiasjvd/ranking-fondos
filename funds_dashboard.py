@@ -23,6 +23,17 @@ from simple_cart_fixed import PortfolioManager, integrate_portfolio_manager
 
 
 
+
+# Page configuration
+st.set_page_config(
+    page_title="Fund Analysis Dashboard",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+
 import hashlib, inspect, metrics_calculator
 
 APP_VERSION = "2026-01-06_11-50"
@@ -35,13 +46,6 @@ st.sidebar.caption(f"APP_VERSION: {APP_VERSION}")
 st.sidebar.caption(f"metrics_calculator hash: {_fingerprint()}")
 
 
-# Page configuration
-st.set_page_config(
-    page_title="Fund Analysis Dashboard",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # Professional dark theme styling (IGUAL QUE EL ORIGINAL)
 st.markdown("""
