@@ -20,6 +20,21 @@ from metrics_calculator import calculate_individual_fund_metrics, calculate_port
 # SIMPLE CART INTEGRATION
 from simple_cart_fixed import PortfolioManager, integrate_portfolio_manager
 
+
+
+
+import hashlib, inspect, metrics_calculator
+
+APP_VERSION = "2026-01-06_11-50"
+
+def _fingerprint():
+    src = inspect.getsource(metrics_calculator.calculate_individual_fund_metrics)
+    return hashlib.md5(src.encode()).hexdigest()[:10]
+
+st.sidebar.caption(f"APP_VERSION: {APP_VERSION}")
+st.sidebar.caption(f"metrics_calculator hash: {_fingerprint()}")
+
+
 # Page configuration
 st.set_page_config(
     page_title="Fund Analysis Dashboard",
