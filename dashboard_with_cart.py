@@ -32,6 +32,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+Fund Analysis Dashboard
+
 # Professional dark theme styling
 st.markdown("""
 <style>
